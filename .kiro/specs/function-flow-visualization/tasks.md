@@ -1,0 +1,148 @@
+# Implementation Plan
+
+- [ ] 1. Foundation: 拡張の起動基盤とローカル実行境界を整える
+- [ ] 1.1 VS Code 側の起動口と設定を GlitchLens の可視化機能へ置き換える
+  - hello world の起動口を、関数フロー可視化 command、CodeLens 起動、Workspace Trust 前提の manifest 設定へ置き換える。
+  - TypeScript / JavaScript だけが初期対象になるよう、対応言語と非対応言語の判定が明確になる。
+  - VS Code の command palette から可視化 command が見え、未実装の外部連携や LLM 連携の起動口が存在しない状態になる。
+  - _Requirements: 1.1, 1.2, 1.4, 7.3_
+- [ ] 1.2 Core logic と VS Code Integration の境界を実装時に守れる土台を作る
+  - VS Code API を Integration 境界へ閉じ込めるための module 境界と import 方針を実装に反映する。
+  - core 側の単体テストと VS Code 統合テストを分けて実行できる状態にする。
+  - `strict` TypeScript、lint、test scripts が新しい構成でも通る状態になる。
+  - _Requirements: 7.1, 7.2, 8.3_
+
+- [ ] 2. Common Flow Model: 静的処理フローの安定契約を実装する
+- [ ] 2.1 FlowNode、FlowEdge、metadata、source location、diagnostic のモデルを定義する
+  - Call、Branch、Loop、Await、Return、Throw、Try/Catch、unknown / unresolved を表せるモデルにする。
+  - FlowEdge は接続元、接続先、edge kind、execution order、任意の label、condition、source location を保持する。
+  - metadata は analyzer id、analyzer version、language id、generated at、source document version、completeness、configuration digest を保持する。
+  - AST、Symbol、VS Code object を含まない plain data として扱える状態になる。
+  - _Requirements: 2.2, 2.3, 2.4, 3.1, 3.3, 3.4, 6.1, 6.2, 7.2_
+- [ ] 2.2 FlowModel の順序、部分結果、未解決要素を検証する単体テストを追加する
+  - node order と edge execution order が元コード順を保持できることを fixture で確認する。
+  - unknown / unresolved、partial completeness、diagnostic が同じモデル内で表現できることを確認する。
+  - FlowEdge と metadata が言語固有 object を保持しないことを型とテストで確認できる。
+  - _Requirements: 2.2, 3.1, 3.3, 3.4, 6.1, 6.3, 6.4, 7.2_
+
+- [ ] 3. Analyzer: TypeScript / JavaScript の対象関数と静的処理フローを抽出する
+- [ ] 3.1 Language Analyzer 契約と analyzer selection を実装する
+  - Analyzer は source file、cursor position、configuration、cancellation を受け取り、Common Flow Model と diagnostics を返す。
+  - TypeScript / JavaScript の analyzer が選択され、非対応言語では解析開始前に扱える error が返る。
+  - Analyzer から Mermaid、WebView、Clipboard、VS Code API へ依存しない状態になる。
+  - _Requirements: 1.4, 2.1, 2.4, 6.3, 7.1, 7.2_
+- [ ] 3.2 TypeScript / JavaScript の関数特定を実装する
+  - CodeLens 用の関数候補 range と、カーソル位置を含む最も近い関数を解決できる。
+  - 対象関数が見つからない場合は解析を開始せずに扱える結果を返す。
+  - TypeScript と JavaScript の代表的な関数宣言、関数式、arrow function で対象関数が特定できる。
+  - _Requirements: 1.1, 1.2, 1.3_
+- [ ] 3.3 対象関数内の Call と制御構造を source order で抽出する
+  - 関数 body の処理順序に沿って Call、Branch、Loop、Await、Return、Throw、Try/Catch を識別する。
+  - Branch、Loop、Try/Catch の接続関係を FlowEdge として保持する。
+  - 呼び出し先関数内部へ再帰的に入らず、対象関数内の静的処理フローだけがモデル化される。
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 7.4_
+- [ ] 3.4 未解決呼び出し、部分結果、キャンセルを Analyzer で扱う
+  - 静的に解決できない呼び出しは unknown または unresolved としてモデルと diagnostic に残る。
+  - 一部の statement が解析できなくても、解析済み範囲と未解析箇所を区別できる部分結果が返る。
+  - cancellation が要求された場合に古い解析を中断でき、対象コードの実行や実行時トレースを行わない状態が保たれる。
+  - _Requirements: 6.1, 6.3, 6.5, 7.1, 7.4, 8.3, 8.4_
+- [ ] 3.5 Analyzer の単体テストを代表構文と失敗ケースで揃える
+  - TypeScript / JavaScript の関数特定、呼び出し順、分岐、ループ、await、return、throw、try/catch を検証する。
+  - unresolved、partial result、target not found、unsupported language の振る舞いがテストで確認できる。
+  - 深度解析しないことと対象コードを実行しないことを fixture で確認できる。
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 6.1, 6.3, 6.5, 7.4_
+
+- [ ] 4. Renderer: Common Flow Model から Mermaid sequenceDiagram を生成する
+- [ ] 4.1 Mermaid text、source map、renderer warning を生成する
+  - FlowNode と FlowEdge の順序を使って sequenceDiagram text を生成する。
+  - unknown / unresolved と順序不確定箇所が Mermaid 上で認識できる形になる。
+  - Mermaid 要素と source location の対応を source map として返し、Renderer は UI 固有表示文言や VS Code API に依存しない。
+  - _Depends: 2.1_
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.3, 5.2, 6.1, 6.2, 7.2_
+- [ ] 4.2 Mermaid Renderer の単体テストを追加する
+  - nodes と edges だけから Mermaid text が生成されることを確認する。
+  - branch、loop、try/catch、return、throw、unknown / unresolved、partial result の出力が安定する。
+  - source map と renderer warning が UI 非依存で返ることを確認できる。
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.3, 5.2, 6.1, 6.2_
+
+- [ ] 5. Application: 解析、描画、キャッシュ、ユーザー向け結果を調停する
+- [ ] 5.1 Visualize use case で Analyzer と Renderer を接続する
+  - request から analyzer を選び、解析結果を Mermaid Renderer に渡して表示用結果へまとめる。
+  - FlowDiagnostic と RendererWarning はユーザー向け notice に変換され、Renderer contract へ UI 固有型が混ざらない。
+  - 完全解析失敗でも Mermaid として表現できる部分結果があれば表示用結果として返る。
+  - _Depends: 3.1, 4.1_
+  - _Requirements: 2.1, 4.1, 4.4, 6.2, 6.3, 6.4, 8.4, 8.5_
+- [ ] 5.2 Analysis cache と無効化を実装する
+  - cache key は document URI、document version、function range、configuration digest、analyzer id、analyzer version を含む。
+  - document change、configuration change、analyzer version change で古い結果を再利用しない。
+  - cancelled result は cache せず、source version が一致する partial result だけ再利用できる。
+  - _Depends: 2.1, 3.1_
+  - _Requirements: 8.1, 8.3, 8.4_
+- [ ] 5.3 Application の単体テストで orchestration と cache を検証する
+  - supported / unsupported language、target not found、partial success、render failure、cancelled の結果が区別される。
+  - analyzer version を変えると cache miss になることを確認する。
+  - diagnostics と renderer warnings が user-visible notices に変換されることを確認できる。
+  - _Requirements: 1.3, 1.4, 4.4, 6.2, 6.3, 6.4, 8.1, 8.4, 8.5_
+
+- [ ] 6. VS Code Integration: command、CodeLens、表示、Clipboard を接続する
+- [ ] 6.1 CommandController でカーソル起点と CodeLens 起点の実行を扱う
+  - VS Code document、position、cancellation を plain request に変換して Application を呼び出す。
+  - 解析中 state、対象関数なし、非対応言語、解析失敗が VS Code 上でユーザーに分かる。
+  - command 実行中も VS Code の通常編集操作を妨げない。
+  - _Depends: 5.1_
+  - _Requirements: 1.2, 1.3, 1.4, 4.2, 8.2, 8.3, 8.5_
+- [ ] 6.2 CodeLens provider で軽量な関数起動 UI を提供する
+  - 対応言語の関数に CodeLens が表示され、実行時に対象関数 range が command へ渡る。
+  - CodeLens 計算では詳細解析を行わず、cancellation により古い計算を破棄できる。
+  - CodeLens から起動した関数が解析対象として特定されることを確認できる。
+  - _Depends: 3.2_
+  - _Requirements: 1.1, 8.3_
+- [ ] 6.3 VisualizationView と Webview adapter で可視化結果を表示する
+  - Application から受け取った表示用結果だけを使い、Analyzer 固有データや Renderer warning を直接扱わない。
+  - VS Code 上で Mermaid 図、未解決要素、解析できた範囲とできなかった箇所が表示される。
+  - Webview adapter には CSP、nonce、local resource 制限が設定される。
+  - _Depends: 5.1_
+  - _Requirements: 3.1, 3.2, 3.4, 4.2, 4.3, 4.4, 6.2, 6.4, 7.2_
+- [ ] 6.4 Clipboard 操作で現在の Mermaid text をコピーできるようにする
+  - 表示中の図に対応する Mermaid text をユーザー操作で clipboard へ保存できる。
+  - コピー対象がない場合は理由が通知される。
+  - Clipboard 利用は Integration 境界に留まり、解析結果の外部送信を行わない。
+  - _Depends: 6.3_
+  - _Requirements: 5.1, 5.2, 5.3, 7.2_
+- [ ] 6.5 Workspace Trust とローカル処理の runtime guard を組み込む
+  - Restricted Mode で許可する動作と制限する動作が manifest と runtime の両方で一致する。
+  - ソースコード、FlowModel、Mermaid text、diagnostics を外部サービスへ送信する経路が存在しない。
+  - LLM 連携や実行時トレースのコードパスがこの仕様の機能として登録されていない。
+  - _Requirements: 7.1, 7.2, 7.3, 7.4_
+
+- [ ] 7. Integration validation: VS Code 上の主要体験を通す
+- [ ] 7.1 Extension entry で登録と lifecycle をまとめる
+  - command、CodeLens、VisualizationView、Clipboard、Workspace Trust 関連の disposable が extension lifecycle に登録される。
+  - extension entry は登録だけを担当し、解析や Mermaid 生成の business logic を持たない。
+  - package contribution と実装内 command id が一致していることを確認できる。
+  - _Depends: 6.1, 6.2, 6.3, 6.4, 6.5_
+  - _Requirements: 1.1, 1.2, 5.1, 7.1, 7.2_
+- [ ] 7.2 VS Code 統合テストで command、CodeLens、表示、Clipboard を検証する
+  - カーソル起点と CodeLens 起点の両方から可視化が開始される。
+  - Mermaid 図が VS Code 上に表示され、unknown / unresolved と partial result がユーザーに見える。
+  - 表示済み Mermaid text をコピーでき、コピー対象なしの理由も通知される。
+  - _Requirements: 1.1, 1.2, 3.2, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 8.2_
+
+- [ ] 8. Responsiveness and safety validation: 応答性優先の振る舞いを確認する
+- [ ] 8.1 大きい関数や複雑な関数で部分結果とキャンセルを検証する
+  - 完全解析より応答性を優先し、可能な範囲の部分結果が表示される。
+  - 新しい編集や再実行で古い解析が破棄され、UI が長時間ブロックされない。
+  - 解析できなかった箇所または失敗理由がユーザーに提示される。
+  - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 6.3, 6.4_
+- [ ] 8.2 ローカル静的解析のみで完結することを検証する
+  - 対象コードを実行しない fixture と、実行時トレースを使わない経路を検証する。
+  - ソースコード、解析結果、Mermaid text が外部送信や永続化されないことを確認する。
+  - Workspace Trust の制約下でも安全な範囲で動作または明示的に制限される。
+  - _Requirements: 2.1, 7.1, 7.2, 7.3, 7.4_
+
+- [ ] 9. Final verification: 品質ゲートを通して実装完了にする
+- [ ] 9.1 TypeScript、lint、unit test、integration test を通す
+  - `check-types`、lint、compile、unit tests、VS Code integration tests が成功する。
+  - core logic の単体テストと VS Code 統合テストが分離されたまま実行できる。
+  - 失敗があれば要件に紐づくタスクへ戻して修正できる状態になる。
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4, 8.5_
