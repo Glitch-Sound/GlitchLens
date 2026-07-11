@@ -65,20 +65,20 @@
   - source map と renderer warning が UI 非依存で返ることを確認できる。
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.3, 5.2, 6.1, 6.2_
 
-- [ ] 5. Application: 解析、描画、キャッシュ、ユーザー向け結果を調停する
-- [ ] 5.1 Visualize use case で Analyzer と Renderer を接続する
+- [x] 5. Application: 解析、描画、キャッシュ、ユーザー向け結果を調停する
+- [x] 5.1 Visualize use case で Analyzer と Renderer を接続する
   - request から analyzer を選び、解析結果を Mermaid Renderer に渡して表示用結果へまとめる。
   - FlowDiagnostic と RendererWarning はユーザー向け notice に変換され、Renderer contract へ UI 固有型が混ざらない。
   - 完全解析失敗でも Mermaid として表現できる部分結果があれば表示用結果として返る。
   - _Depends: 3.1, 4.1_
   - _Requirements: 2.1, 4.1, 4.4, 6.2, 6.3, 6.4, 8.4, 8.5_
-- [ ] 5.2 Analysis cache と無効化を実装する
+- [x] 5.2 Analysis cache と無効化を実装する
   - cache key は document URI、document version、function range、configuration digest、analyzer id、analyzer version を含む。
   - document change、configuration change、analyzer version change で古い結果を再利用しない。
   - cancelled result は cache せず、source version が一致する partial result だけ再利用できる。
   - _Depends: 2.1, 3.1_
   - _Requirements: 8.1, 8.3, 8.4_
-- [ ] 5.3 Application の単体テストで orchestration と cache を検証する
+- [x] 5.3 Application の単体テストで orchestration と cache を検証する
   - supported / unsupported language、target not found、partial success、render failure、cancelled の結果が区別される。
   - analyzer version を変えると cache miss になることを確認する。
   - diagnostics と renderer warnings が user-visible notices に変換されることを確認できる。
