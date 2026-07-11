@@ -1,0 +1,676 @@
+# Design Document
+
+## Overview
+
+Function Flow Visualization は、VS Code 上で現在読んでいる TypeScript / JavaScript 関数を静的解析し、静的処理フローと推定呼び出し順を Mermaid シーケンス図として可視化する機能です。対象ユーザーは VS Code 上で開発するエンジニア、コードレビュアー、レガシーコードの保守開発者です。
+
+この設計は product.md、tech.md、structure.md を最優先の設計指針とし、Requirements を満たす範囲だけを対象にします。Common Flow Model を唯一の中間表現、かつ Analyzer と Renderer を接続する Stable Contract として扱います。
+
+### Goals
+
+- CodeLens またはカーソル位置から対象関数を特定し、静的処理フローを VS Code 上で確認できるようにする。
+- Analyzer -> Common Flow Model -> Renderer の一方向依存を維持する。
+- VS Code API を Integration 層へ閉じ込め、Analyzer と Renderer を VS Code 非依存にする。
+- 完全解析より応答性を優先し、unknown / unresolved と部分結果をユーザーに明示する。
+
+### Non-Goals
+
+- TypeScript / JavaScript 以外の言語対応。
+- Sequence Diff、Test Hints、Layer Classification、Architecture Rules の実装。
+- PNG / SVG Export、Markdown への直接挿入。
+- LLM 連携、実行時トレース、動的呼び出しの完全解決。
+- 呼び出し先関数内部の再帰的な深度解析。
+
+## Boundary Commitments
+
+### This Spec Owns
+
+- VS Code command と CodeLens から対象関数を特定する Integration。
+- 対象関数を入力にした Application use case。
+- TypeScript / JavaScript Analyzer と Language Analyzer Interface。
+- Common Flow Model のデータモデル、FlowEdge、metadata、FlowDiagnostic contract。
+- Common Flow Model から Mermaid シーケンス図を生成する Renderer。
+- 初期表示 UI と Mermaid テキストコピー。
+- unknown / unresolved、部分結果、キャンセル、キャッシュ、安全性に関する設計。
+
+### Out of Boundary
+
+- Future capabilities の実装。Sequence Diff、Test Hints、Layer Classification、Architecture Rules は Common Flow Model を入力とする拡張点としてのみ記述する。
+- TypeScript / JavaScript 以外の Analyzer 実装。
+- PNG / SVG Export、Markdown 直接挿入。
+- 外部サービス連携、LLM 連携、実行時トレース。
+- Analyzer から Mermaid や表示 UI を直接生成する経路。
+
+### Allowed Dependencies
+
+- VS Code API: Integration 層だけが import できる。
+- TypeScript Compiler API: TypeScript Analyzer だけが AST / Symbol 解析のために使用できる。
+- Common Flow Model: Application、Analyzer、Renderer、Integration adapter が共有できる唯一の中間 contract。
+- Mermaid syntax: Renderer と表示 UI の表示責務に限定して扱う。
+
+### Revalidation Triggers
+
+- Common Flow Model の shape、node kind、diagnostic kind、source location contract が変わる場合。
+- Analyzer が VS Code API、Renderer、表示 UI へ依存し始める場合。
+- Renderer が AST または Analyzer 固有データを要求し始める場合。
+- 表示 UI を Webview adapter 以外へ変更する場合。ただし Application、Analyzer、Renderer の contract を変更しない限り core layer の再設計は不要とする。
+- TypeScript / JavaScript 以外の言語を追加する場合。
+
+## Architecture
+
+### Existing Architecture Analysis
+
+現状は VS Code 拡張テンプレートに近く、`src/extension.ts` に hello world command があるだけです。`package.json` は command contribution、`main: ./dist/extension.js`、esbuild bundle、TypeScript strict を定義しています。既存の domain boundary はまだ存在しないため、本設計でレイヤー境界を導入します。
+
+### Architecture Pattern & Boundary Map
+
+選択するパターンは steering と一致する Layered Architecture です。依存方向は Integration から Renderer へ向かう一方向に限定し、下位層から上位層へ戻る import を禁止します。
+
+```mermaid
+graph TB
+    VSCodeIntegration[VS Code Integration]
+    Application[Application]
+    Analyzer[Language Analyzer]
+    FlowModel[Common Flow Model]
+    Renderer[Renderer]
+    VisualizationView[Visualization View]
+
+    VSCodeIntegration --> Application
+    Application --> Analyzer
+    Analyzer --> FlowModel
+    Application --> Renderer
+    Renderer --> FlowModel
+    VSCodeIntegration --> VisualizationView
+```
+
+Key decisions:
+- Analyzer は Common Flow Model だけを返す。Mermaid 文字列、Webview HTML、Clipboard 操作は扱わない。
+- Renderer は Common Flow Model だけを入力にする。AST、Symbol、Analyzer 固有データは扱わない。
+- Integration は VS Code API の adapter であり、Core logic へ `vscode` 型を渡さない。
+
+### Technology Stack
+
+| Layer | Choice / Version | Role in Feature | Notes |
+|-------|------------------|-----------------|-------|
+| Runtime | VS Code extension host / `engines.vscode ^1.125.0` | Command、CodeLens、表示 UI、Clipboard | Integration 層に限定 |
+| Language | TypeScript `6.0.3` / `strict` | 全体実装と型安全 | `any` は使用しない |
+| Analyzer | TypeScript Compiler API | TypeScript / JavaScript の AST と Symbol 解析 | Analyzer 層に限定 |
+| Renderer | Built-in TypeScript module | Common Flow Model から Mermaid 生成 | 新規依存なし |
+| Build | esbuild `0.28.1` | extension bundle | 既存構成を維持 |
+| Test | Mocha / VS Code Test | Core unit と VS Code integration test | テスト層を分離 |
+
+## File Structure Plan
+
+### Directory Structure
+
+```text
+src/
+├── extension.ts
+├── integration/
+│   ├── commands.ts
+│   ├── codeLensProvider.ts
+│   ├── documentSelector.ts
+│   ├── visualizationView.ts
+│   ├── webviewVisualizationAdapter.ts
+│   ├── clipboard.ts
+│   ├── workspaceTrust.ts
+│   └── vscodeAdapters.ts
+├── application/
+│   ├── visualizeFunctionFlow.ts
+│   ├── analyzerRegistry.ts
+│   ├── cache.ts
+│   └── visualizationViewModel.ts
+├── analyzers/
+│   ├── languageAnalyzer.ts
+│   └── typescript/
+│       ├── typescriptAnalyzer.ts
+│       ├── functionLocator.ts
+│       ├── astFlowExtractor.ts
+│       └── symbolResolver.ts
+├── flow-model/
+│   ├── flowModel.ts
+│   ├── flowNode.ts
+│   ├── flowEdge.ts
+│   ├── metadata.ts
+│   ├── diagnostics.ts
+│   └── sourceLocation.ts
+├── renderer/
+│   └── mermaidRenderer.ts
+└── test/
+    ├── unit/
+    │   ├── flowModel.test.ts
+    │   ├── flowEdge.test.ts
+    │   ├── flowModelMetadata.test.ts
+    │   ├── typescriptAnalyzer.test.ts
+    │   └── mermaidRenderer.test.ts
+    └── integration/
+        ├── commandFlow.test.ts
+        └── codeLensProvider.test.ts
+```
+
+### Modified Files
+
+- `src/extension.ts` — extension entry を thin entry にし、commands、CodeLens、visualization view lifecycle を登録する。
+- `package.json` — `glitchlens.visualizeFunctionFlow` command、CodeLens activation、workspace trust capabilities、必要な configuration を定義する。既存 hello world command は置き換え対象。
+- `tsconfig.json` — `strict` を維持する。追加 compiler option は設計上必須ではない。
+- `eslint.config.mjs` — 必要に応じて core 層での `vscode` import 禁止を lint rule または review rule として補強する。
+
+## System Flows
+
+### Command / Cursor Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Integration
+    participant Application
+    participant Analyzer
+    participant Model
+    participant Renderer
+    participant View
+
+    User->>Integration: Start visualization
+    Integration->>Application: Plain source request
+    Application->>Analyzer: Analyze selected function
+    Analyzer->>Model: Return flow model
+    Application->>Renderer: Render model
+    Renderer->>Application: Mermaid text and warnings
+    Application->>Integration: Visualization view model
+    Integration->>View: Show in VS Code
+```
+
+### CodeLens Flow
+
+```mermaid
+sequenceDiagram
+    participant VSCode
+    participant CodeLens
+    participant Command
+    participant Application
+
+    VSCode->>CodeLens: Request lenses
+    CodeLens->>VSCode: Return lightweight lens
+    VSCode->>Command: Execute lens command
+    Command->>Application: Start visualization
+```
+
+CodeLens provider は対象関数候補と command 引数だけを返します。詳細解析は command 実行後に Application が開始します。
+
+## Requirements Traceability
+
+| Requirement | Summary | Components | Interfaces | Flows |
+|-------------|---------|------------|------------|-------|
+| 1.1 | CodeLens から対象関数を特定 | CodeLensProvider, CommandController | CodeLens command args | CodeLens Flow |
+| 1.2 | カーソル位置から対象関数を特定 | CommandController, FunctionLocator | VisualizationRequest | Command Flow |
+| 1.3 | 対象関数なしを通知 | CommandController, VisualizationView | VisualizationError | Command Flow |
+| 1.4 | 非対応言語を通知 | DocumentSelector, CommandController | SupportedLanguage | Command Flow |
+| 2.1 | 対象コードを実行しない | TypeScriptAnalyzer | AnalyzerInput | Command Flow |
+| 2.2 | 処理順序を保持 | AstFlowExtractor, FlowModel | FlowNode.order | Command Flow |
+| 2.3 | Call を抽出 | AstFlowExtractor | FlowCallNode | Command Flow |
+| 2.4 | Branch Loop Await Return Throw TryCatch を識別 | AstFlowExtractor | FlowNode union | Command Flow |
+| 2.5 | 深度解析しない | TypeScriptAnalyzer | AnalyzerConfig.maxDepth | Command Flow |
+| 3.1 | 元コード順序を保持表示 | FlowModel, MermaidRenderer, VisualizationView | FlowNode.order, FlowEdge.executionOrder, SourceLocation | Command Flow |
+| 3.2 | 元コード追跡情報を表示 | VisualizationView, FlowModel | SourceLocation, RenderSourceMapEntry | Command Flow |
+| 3.3 | 推定呼び出し順を一貫表示 | FlowModel, MermaidRenderer | FlowNode.order, FlowEdge.executionOrder | Command Flow |
+| 3.4 | 順序不確定箇所を区別 | FlowDiagnostic, VisualizationView | Diagnostic severity | Command Flow |
+| 4.1 | Mermaid テキスト生成 | MermaidRenderer | RenderResult | Command Flow |
+| 4.2 | VS Code 上に表示 | VisualizationView | VisualizationResult | Command Flow |
+| 4.3 | 静的処理フローを視覚確認 | VisualizationView, MermaidRenderer | VisualizationViewModel | Command Flow |
+| 4.4 | 部分結果を表示 | Application, VisualizationView | PartialAnalysisResult | Command Flow |
+| 5.1 | コピー操作提供 | VisualizationView, ClipboardAdapter | CopyCommand | Command Flow |
+| 5.2 | Mermaid テキストを保存 | ClipboardAdapter | MermaidText | Command Flow |
+| 5.3 | コピー不可理由を通知 | ClipboardAdapter, VisualizationView | VisualizationError | Command Flow |
+| 6.1 | unknown unresolved 表示 | TypeScriptAnalyzer, MermaidRenderer | UnknownCallNode | Command Flow |
+| 6.2 | 未解決要素を認識可能にする | Application, VisualizationView | VisualizationNotice | Command Flow |
+| 6.3 | 解析範囲を表示 | Application, VisualizationView | PartialAnalysisResult | Command Flow |
+| 6.4 | 解析済みと未解析を区別 | VisualizationView | VisualizationNotice | Command Flow |
+| 6.5 | 動的呼び出し完全解決を保証しない | TypeScriptAnalyzer | Diagnostic kind | Command Flow |
+| 7.1 | ソースコードを外部送信しない | All components | Local-only boundary | Command Flow |
+| 7.2 | 解析結果を外部送信しない | All components | Local-only boundary | Command Flow |
+| 7.3 | LLM 連携しない | Boundary | None | None |
+| 7.4 | 実行時トレースしない | TypeScriptAnalyzer | Static-only analyzer | Command Flow |
+| 8.1 | 通常規模で即時確認 | Application, Cache | CacheKey with analyzer version, cancellation | Command Flow |
+| 8.2 | 解析中状態を表示 | CommandController, VisualizationView | Progress state | Command Flow |
+| 8.3 | 編集操作を継続可能 | Application | CancellationToken adapter | Command Flow |
+| 8.4 | 応答性優先で部分結果 | Application, TypeScriptAnalyzer | PartialAnalysisResult | Command Flow |
+| 8.5 | 失敗理由を提示 | Application, VisualizationView | VisualizationError | Command Flow |
+
+## Components and Interfaces
+
+| Component | Domain / Layer | Intent | Req Coverage | Key Dependencies | Contracts |
+|-----------|----------------|--------|--------------|------------------|-----------|
+| ExtensionEntry | VS Code Integration | 拡張の登録入口 | 1.1, 1.2, 5.1 | Commands P0, CodeLens P1 | Service |
+| CommandController | VS Code Integration | command 実行と通知 | 1.2, 1.3, 4.2, 8.2 | Application P0 | Service |
+| CodeLensProvider | VS Code Integration | 関数上の起動 UI | 1.1 | FunctionLocator P1 | Service |
+| VisualizationView | VS Code Integration | 表示方式に依存しない可視化表示境界 | 3.1, 4.2, 6.4 | VisualizationViewModel P0 | State |
+| ClipboardAdapter | VS Code Integration | Mermaid text copy | 5.1, 5.2, 5.3 | VS Code Clipboard P0 | Service |
+| VisualizeFunctionFlowUseCase | Application | 解析から表示用結果までの orchestration | 1.2, 2.1, 4.4, 8.4 | Analyzer P0, Renderer P0, Cache P1 | Service |
+| AnalyzerRegistry | Application | language id から Analyzer を選択 | 1.4, 2.1 | LanguageAnalyzer P0 | Service |
+| AnalysisCache | Application | document version と analyzer version 単位の再利用 | 8.1, 8.3 | CacheKey P1 | State |
+| LanguageAnalyzer | Analyzer | 全 Analyzer の共通契約 | 2.1, 2.4, 6.3 | FlowModel P0 | Service |
+| TypeScriptAnalyzer | Analyzer | TS JS 静的解析 | 2.1, 2.3, 2.4, 6.1 | TypeScript Compiler API P0 | Service |
+| FunctionLocator | Analyzer | cursor と CodeLens から対象関数を解決 | 1.1, 1.2 | TypeScript SourceFile P0 | Service |
+| FlowModel | Common Model | 唯一の中間表現 | 2.2, 3.1, 3.3 | None P0 | State |
+| FlowEdge | Common Model | 制御構造と実行順序の接続表現 | 2.4, 3.1, 3.4 | FlowNode P0 | State |
+| FlowModelMetadata | Common Model | 解析結果の由来と cache invalidation 情報 | 7.2, 8.1 | Analyzer P0 | State |
+| MermaidRenderer | Renderer | Mermaid sequence diagram 生成 | 4.1, 6.1 | FlowModel P0 | Service |
+
+### VS Code Integration
+
+#### ExtensionEntry
+
+| Field | Detail |
+|-------|--------|
+| Intent | extension activation 時に Integration component を登録する |
+| Requirements | 1.1, 1.2, 5.1 |
+
+**Responsibilities & Constraints**
+- `activate` は command、CodeLens、display/clipboard adapters の登録だけを行う。
+- VS Code API import は Integration 配下と `extension.ts` に限定する。
+- `context.subscriptions` へ Disposable を集約する。
+
+**Contracts**: Service [x] / State [ ] / API [ ] / Event [ ]
+
+#### CommandController
+
+| Field | Detail |
+|-------|--------|
+| Intent | user action を plain request に変換し Application を呼ぶ |
+| Requirements | 1.2, 1.3, 1.4, 4.2, 8.2, 8.5 |
+
+**Responsibilities & Constraints**
+- `TextDocument`、`Position`、`CancellationToken` を Integration 内で plain data へ変換する。
+- 対象関数なし、非対応言語、解析失敗をユーザー通知へ変換する。
+- 解析中 state を表示 UI に通知する。
+- Application が返す `VisualizationViewModel` を VisualizationView へ渡す。CommandController は Mermaid 生成や FlowModel 変換を行わない。
+
+##### Service Interface
+
+```typescript
+interface CommandController {
+  visualizeFromCursor(command: CursorCommandInput): Promise<void>;
+  visualizeFromCodeLens(command: CodeLensCommandInput): Promise<void>;
+}
+```
+
+#### CodeLensProvider
+
+| Field | Detail |
+|-------|--------|
+| Intent | 対応言語の関数付近に軽量な起動 affordance を提供する |
+| Requirements | 1.1, 8.3 |
+
+**Responsibilities & Constraints**
+- 関数候補と range の検出に留め、詳細解析は行わない。
+- cancellation request を尊重し、古い CodeLens 計算を破棄する。
+
+#### VisualizationView
+
+| Field | Detail |
+|-------|--------|
+| Intent | VS Code 上で Mermaid 図、未解決要素、解析不能箇所を表示する |
+| Requirements | 3.1, 3.2, 4.2, 4.3, 6.2, 6.4 |
+
+**Responsibilities & Constraints**
+- 表示方式に依存しない Integration 境界として、Application から受け取った `VisualizationViewModel` を VS Code 上へ表示する。
+- 初期実装では Webview adapter を利用する。
+- 将来 Sidebar、Panel、Custom Editor へ変更しても、Application、Analyzer、Renderer を変更しない。
+- Webview adapter では CSP、nonce、`localResourceRoots` 最小化を適用する。
+- 表示 UI は Analyzer 固有データ、Renderer の戻り値、FlowDiagnostic、RendererWarning を直接受け取らず、Application が生成した `VisualizationViewModel` とユーザー向け `VisualizationNotice` だけを扱う。
+
+#### ClipboardAdapter
+
+| Field | Detail |
+|-------|--------|
+| Intent | 現在表示中の Mermaid テキストを VS Code Clipboard へ保存する |
+| Requirements | 5.1, 5.2, 5.3 |
+
+**Responsibilities & Constraints**
+- Clipboard API の利用を Integration 層に閉じ込める。
+- コピー対象がない場合はユーザー通知へ変換する。
+
+### Application
+
+#### VisualizeFunctionFlowUseCase
+
+| Field | Detail |
+|-------|--------|
+| Intent | 対象関数特定済み request を Analyzer と Renderer へ渡して表示可能な結果へまとめる |
+| Requirements | 2.1, 4.4, 6.3, 8.1, 8.4 |
+
+**Responsibilities & Constraints**
+- Analyzer 選択、解析開始、Renderer 呼び出し、部分結果処理を調停する。
+- Mermaid syntax、AST、VS Code API を直接扱わない。
+- 完全解析失敗時も部分結果がある場合は `VisualizationResult` を返す。
+- FlowDiagnostic と RendererWarning をユーザー向け `VisualizationNotice` へ変換し、VisualizationView へ渡せる形にする。
+- Application は具体的な表示方式を知らない。
+
+##### Service Interface
+
+```typescript
+interface VisualizeFunctionFlowUseCase {
+  execute(input: VisualizationRequest): Promise<VisualizationResult>;
+}
+```
+
+#### AnalyzerRegistry
+
+| Field | Detail |
+|-------|--------|
+| Intent | language id から利用可能な Analyzer を選択する |
+| Requirements | 1.4, 2.1 |
+
+**Responsibilities & Constraints**
+- 初期登録は TypeScript / JavaScript Analyzer のみ。
+- 未対応言語は user-visible error へ変換可能な error envelope を返す。
+
+#### AnalysisCache
+
+| Field | Detail |
+|-------|--------|
+| Intent | document URI、version、function range、configuration、analyzer id、analyzer version 単位で結果を再利用する |
+| Requirements | 8.1, 8.3, 8.4 |
+
+**Responsibilities & Constraints**
+- document change で該当 document の cache を無効化する。
+- cache key には document URI、document version、function range、configuration digest、analyzer id、analyzer version を必ず含める。
+- Analyzer の解析ロジックまたは Common Flow Model 変換仕様が変わる場合は analyzer version を変更し、古い結果を再利用しない。
+- 部分結果も cache 可能だが、source version が一致する場合だけ使用する。
+- cache は外部永続化しない。
+
+### Analyzer
+
+#### LanguageAnalyzer Interface
+
+| Field | Detail |
+|-------|--------|
+| Intent | すべての Analyzer が従う共通契約 |
+| Requirements | 2.1, 2.4, 6.3 |
+
+##### Service Interface
+
+```typescript
+interface LanguageAnalyzer {
+  readonly languageIds: readonly SupportedLanguageId[];
+  analyze(input: AnalyzerInput): Promise<AnalyzerResult>;
+}
+
+interface AnalyzerInput {
+  source: SourceFileInput;
+  cursorOffset: number;
+  configuration: AnalyzerConfiguration;
+  cancellation: CancellationSignal;
+}
+
+interface AnalyzerResult {
+  model: FlowModel;
+  diagnostics: readonly FlowDiagnostic[];
+  completeness: AnalysisCompleteness;
+}
+```
+
+**Invariants**
+- Analyzer は VS Code API、Renderer、VisualizationView、他言語 Analyzer に依存しない。
+- Analyzer は Mermaid テキストを生成しない。
+- Analyzer は対象コードを実行しない。
+
+#### TypeScriptAnalyzer
+
+| Field | Detail |
+|-------|--------|
+| Intent | TypeScript / JavaScript の AST と Symbol 情報から FlowModel を生成する |
+| Requirements | 2.1, 2.2, 2.3, 2.4, 2.5, 6.1, 6.5 |
+
+**Responsibilities & Constraints**
+- TypeScript Compiler API で SourceFile を作成し、cursor offset から対象関数を特定する。
+- 対象関数 body の statement order を保持して FlowNode と FlowEdge を生成する。
+- call expression、branch、loop、await、return、throw、try/catch を抽出する。
+- branch、loop、try/catch の接続関係は FlowEdge として生成する。
+- 呼び出し先内部へ深度解析しない。
+- 静的に解決できない call は `unknown` または `unresolved` diagnostic 付きの node とする。
+- `analyzerId` と `analyzerVersion` を FlowModel metadata に設定する。
+
+### Common Flow Model
+
+#### FlowModel
+
+| Field | Detail |
+|-------|--------|
+| Intent | Analyzer と Renderer を接続する唯一の Stable Contract。FlowNode、FlowEdge、metadata を含む |
+| Requirements | 2.2, 3.1, 3.3, 3.4, 6.1, 6.2 |
+
+##### State Contract
+
+```typescript
+type FlowNode =
+  | FlowCallNode
+  | FlowBranchNode
+  | FlowLoopNode
+  | FlowAwaitNode
+  | FlowReturnNode
+  | FlowThrowNode
+  | FlowTryCatchNode;
+
+type FlowEdgeKind =
+  | 'next'
+  | 'true'
+  | 'false'
+  | 'loop-body'
+  | 'loop-exit'
+  | 'try'
+  | 'catch'
+  | 'finally'
+  | 'return'
+  | 'throw'
+  | 'uncertain';
+
+interface FlowEdge {
+  id: FlowEdgeId;
+  sourceNodeId: FlowNodeId;
+  targetNodeId: FlowNodeId;
+  kind: FlowEdgeKind;
+  executionOrder: number;
+  label?: string;
+  condition?: string;
+  sourceLocation?: SourceLocation;
+}
+
+interface FlowModel {
+  metadata: FlowModelMetadata;
+  rootFunction: FlowFunction;
+  nodes: readonly FlowNode[];
+  edges: readonly FlowEdge[];
+  diagnostics: readonly FlowDiagnostic[];
+  source: FlowSource;
+  completeness: AnalysisCompleteness;
+}
+
+interface FlowModelMetadata {
+  schemaVersion: string;
+  analyzerId: string;
+  analyzerVersion: string;
+  languageId: SupportedLanguageId;
+  generatedAt: string;
+  sourceDocumentVersion: number;
+  completeness: AnalysisCompleteness;
+  configurationDigest: string;
+  rootFunctionIdentifier?: string;
+}
+```
+
+**Required Fields**
+- FlowNode `id`: stable within one analysis result.
+- FlowNode `kind`: discriminated union key.
+- FlowNode `order`: monotonic order preserving source traversal.
+- FlowNode `sourceLocation`: file URI string, range, and optional symbol display name.
+- FlowNode `resolution`: `resolved`, `unknown`, or `unresolved` for call-like nodes.
+- FlowEdge `sourceNodeId` and `targetNodeId`: node connection endpoints.
+- FlowEdge `kind`: `next`、`true`、`false`、`loop-body`、`loop-exit`、`try`、`catch`、`finally`、`return`、`throw`、`uncertain` のいずれか。
+- FlowEdge `executionOrder`: edge traversal order.
+- FlowEdge optional fields: label、condition、sourceLocation。
+- Metadata: analyzer id、analyzer version、language id、generated at、source document version、completeness、configuration digest、schema version。
+
+**Invariants**
+- AST node、TypeScript symbol、VS Code object は FlowModel に含めない。
+- TypeScript AST や Symbol 情報を FlowEdge に直接保持しない。
+- Branch、Loop、Try/Catch の接続関係は FlowEdge で表現する。
+- FlowNode と FlowEdge の両方を Common Flow Model の Stable Contract とする。
+- Metadata は言語固有 AST や VS Code object を保持しない。
+- Renderer と future extension points は FlowModel だけを入力にする。
+- Model shape changes are revalidation triggers.
+
+### Renderer
+
+#### MermaidRenderer
+
+| Field | Detail |
+|-------|--------|
+| Intent | FlowModel の nodes と edges から Mermaid sequence diagram text と source map を生成する |
+| Requirements | 3.1, 3.3, 4.1, 4.3, 5.2, 6.1 |
+
+##### Service Interface
+
+```typescript
+interface MermaidRenderer {
+  render(model: FlowModel): RenderResult;
+}
+
+interface RenderResult {
+  mermaidText: string;
+  warnings: readonly RendererWarning[];
+  sourceMap: readonly RenderSourceMapEntry[];
+}
+```
+
+**Responsibilities & Constraints**
+- FlowNode と FlowEdge の `order` / `executionOrder` に従って Mermaid sequence diagram を生成する。
+- Mermaid 内要素と Source Location を対応付ける source map を生成する。
+- unknown / unresolved は明示的な participant または note として表示可能な形にする。
+- Renderer は AST、Analyzer 固有データ、VS Code API を扱わない。
+- Renderer は Webview、表示文言の詳細、UI 固有 diagnostic 型を扱わない。
+- 表現できない model 要素がある場合は UI 非依存な `RendererWarning` として返す。
+- 現時点では `MermaidRenderer` を明示的な実装対象とし、PlantUML など将来形式は実装しない。
+- Renderer interface は Common Flow Model を入力にする独立 contract として維持するが、過剰な generic abstraction は導入しない。
+- PNG / SVG Export は実装しない。
+
+## Data Models
+
+### Domain Model
+
+```mermaid
+erDiagram
+    FlowModel ||--|| FlowFunction : has
+    FlowModel ||--|| FlowModelMetadata : has
+    FlowModel ||--o{ FlowNode : contains
+    FlowModel ||--o{ FlowEdge : connects
+    FlowModel ||--o{ FlowDiagnostic : reports
+    FlowNode ||--|| SourceLocation : maps
+    FlowEdge }o--o| SourceLocation : maps
+```
+
+### Logical Data Model
+
+- `SourceFileInput`: `uri`, `languageId`, `version`, `text` を持つ plain input。
+- `VisualizationRequest`: source、cursor offset、configuration、cancellation を持つ Application input。
+- `FlowModel`: metadata、root function、ordered nodes、edges、diagnostics、source metadata、completeness を持つ stable contract。
+- `FlowEdge`: source node id、target node id、edge kind、execution order、optional label、optional condition、optional source location を持つ制御接続。
+- `FlowModelMetadata`: analyzer id、analyzer version、language id、generated at、source document version、completeness、configuration digest、schema version、optional root function identifier を持つ。
+- `RenderResult`: Mermaid text、renderer warnings、source map を持つ Renderer result。
+- `VisualizationResult`: render result、partial flag、FlowDiagnostic と RendererWarning から変換された user-visible notices を持つ Application output。
+
+### Data Contracts & Integration
+
+- Source text は process memory 内だけで扱い、外部送信も永続化もしない。
+- Cache key は document URI、document version、function range、configuration digest、analyzer id、analyzer version で構成する。
+- Source location は表示 UI の追跡情報に使うが、AST object を露出しない。
+- Analyzer の解析ロジックまたは Common Flow Model 変換仕様が変わった場合は analyzer version を更新し、古い cache entry を再利用しない。
+- Metadata は Sequence Diff、Test Hints、キャッシュ、トラブルシュートで利用できる安定情報とする。ただしこの spec では Sequence Diff と Test Hints は実装しない。
+
+## Error Handling
+
+### Error Strategy
+
+- Analyzer は recoverable な問題を `FlowDiagnostic` と部分結果で返す。
+- Application は fatal error、unsupported language、target not found、cancelled、partial success を区別する。
+- Application は FlowDiagnostic と RendererWarning をユーザー向け表示情報へ変換する。
+- Integration は Application error envelope と user-visible notices をユーザー通知、VisualizationView、または no-op に変換する。
+
+### Error Categories and Responses
+
+- **TargetNotFound**: 対象関数が見つからない。通知して解析を開始しない。
+- **UnsupportedLanguage**: TypeScript / JavaScript 以外。通知して解析を開始しない。
+- **UnresolvedCall**: unknown / unresolved node として FlowModel に保持し、表示に反映する。
+- **PartialAnalysis**: 解析できた範囲を表示し、未解析箇所を明示する。
+- **Cancelled**: 古い解析結果を破棄し、必要なら新しい解析を開始する。
+- **RenderFailure**: Mermaid text を生成できない場合はユーザーに理由を通知し、コピー操作を無効化する。
+
+### Monitoring
+
+初期設計では外部 telemetry を導入しない。必要なログは VS Code extension host の開発者向け console に限定し、ソースコード本文や解析結果本文を出力しない。
+
+## Caching Strategy
+
+- Cache は Application 層に置く。
+- Cache entry は `AnalysisCacheEntry` として FlowModel、RenderResult、diagnostics summary、renderer warning summary を保持する。
+- `TextDocument.version` が変わった場合、その document の cache を無効化する。
+- Configuration が変わった場合、configuration digest が異なるため cache hit しない。
+- Analyzer id または analyzer version が変わった場合、cache key が異なるため古い解析結果を再利用しない。
+- Cancelled result は cache しない。
+- Partial result は source version と function range が一致する場合だけ cache できる。
+- Analyzer version は cache invalidation のための内部識別子であり、ユーザー表示文言には使わない。
+
+## Performance & Scalability
+
+- CodeLens provider は関数候補検出だけを行い、詳細解析をしない。
+- 解析は cancellation-aware にし、document change や新しい command 実行で古い解析を破棄できる。
+- 通常規模の関数では即時確認できる応答性を目標にし、具体的な数値目標は実装計測後に調整する。
+- 大きな関数では完全解析より部分結果を優先する。
+- 呼び出し先内部の深度解析を行わないことで解析範囲を対象関数内に制限する。
+- Renderer は FlowModel の nodes と edges を単一 traversal で処理し、edge execution order を Mermaid 出力順へ反映する。
+
+## Security Considerations
+
+- 対象コードは実行しない。
+- ソースコード、FlowModel、Mermaid text、diagnostics は外部サービスへ送信しない。
+- LLM 連携は実装しない。
+- Webview adapter は CSP、nonce、`localResourceRoots` 制限を設定する。
+- Workspace Trust は package manifest と runtime guard の両方で考慮する。Restricted Mode では安全に動作できる静的表示だけを許可するか、機能を明示的に制限する。
+- Clipboard はユーザー操作でのみ実行する。
+
+## Testing Strategy
+
+### Unit Tests
+
+- `FunctionLocator` verifies 1.1, 1.2, 1.3: cursor offset と function range から対象関数を解決できること、失敗時に target not found を返すこと。
+- `TypeScriptAnalyzer` verifies 2.1, 2.2, 2.3, 2.4, 2.5: 対象コードを実行せず、Call / Branch / Loop / Await / Return / Throw / TryCatch を source order で抽出し、Branch / Loop / TryCatch の接続を FlowEdge で表現し、深度解析しないこと。
+- `FlowModel` verifies 3.1, 3.3, 3.4: node order、edge execution order、metadata、source location、unknown / unresolved の表現が保持されること。
+- `FlowEdge` verifies 2.4, 3.1, 3.4: edge kind、source/target node id、condition、optional source location が AST や Symbol を持たずに表現されること。
+- `FlowModelMetadata` verifies 7.2, 8.1: analyzer id/version、source document version、configuration digest、schema version が保持されること。
+- `MermaidRenderer` verifies 4.1, 4.3, 5.2, 6.1: Mermaid text が FlowModel の nodes と edges だけから生成され、source map と RendererWarning が UI 非依存に返ること。
+- `AnalysisCache` verifies 8.1, 8.4: document version、configuration digest、analyzer id、analyzer version に基づく hit/miss、partial result の扱い。
+
+### Integration Tests
+
+- Command from cursor verifies 1.2, 4.2, 8.2: VS Code command から可視化が開始され、解析中状態と表示結果が得られること。
+- CodeLens command verifies 1.1, 8.3: CodeLens が軽量に提供され、実行時に解析が開始されること。
+- Clipboard flow verifies 5.1, 5.2, 5.3: 表示済み Mermaid text を copy でき、対象なしでは理由が通知されること。
+- Unsupported language verifies 1.4: 非対応 language id で通知されること。
+- Partial result flow verifies 4.4, 6.3, 6.4, 8.4: unresolved を含む関数でも部分結果が表示されること。
+- VisualizationView adapter flow verifies 4.2, 6.2, 6.4: FlowDiagnostic と RendererWarning が Application で user-visible notices に変換され、表示方式を変えても core result を再利用できること。
+
+### E2E / UI Tests
+
+- TypeScript function with branch, await, return verifies 2.4, 3.2, 4.3: VS Code 上の可視化結果で静的処理フローを追跡できること。
+- JavaScript function with unresolved call verifies 6.1, 6.2: unknown / unresolved がユーザーに見えること。
+- Long function cancellation verifies 8.3, 8.5: 編集継続と古い解析破棄ができること。
+- Cache invalidation verifies 8.1: analyzer version が変わったときに古い cache entry を再利用しないこと。
+
+### Performance Tests
+
+- 通常規模の関数で CodeLens 生成が詳細解析を行わないことを測定する。
+- 通常規模の関数で command から表示までの体感応答性を測定する。
+- 大きな関数で partial result が返ること、UI 操作が継続できることを検証する。
+
+## Supporting References
+
+- 詳細な調査ログと公式ドキュメント参照は `research.md` に記録する。
