@@ -13,13 +13,13 @@
   - _Requirements: 7.1, 7.2, 8.3_
 
 - [ ] 2. Common Flow Model: 静的処理フローの安定契約を実装する
-- [ ] 2.1 FlowNode、FlowEdge、metadata、source location、diagnostic のモデルを定義する
+- [x] 2.1 FlowNode、FlowEdge、metadata、source location、diagnostic のモデルを定義する
   - Call、Branch、Loop、Await、Return、Throw、Try/Catch、unknown / unresolved を表せるモデルにする。
   - FlowEdge は接続元、接続先、edge kind、execution order、任意の label、condition、source location を保持する。
   - metadata は analyzer id、analyzer version、language id、generated at、source document version、completeness、configuration digest を保持する。
   - AST、Symbol、VS Code object を含まない plain data として扱える状態になる。
   - _Requirements: 2.2, 2.3, 2.4, 3.1, 3.3, 3.4, 6.1, 6.2, 7.2_
-- [ ] 2.2 FlowModel の順序、部分結果、未解決要素を検証する単体テストを追加する
+- [x] 2.2 FlowModel の順序、部分結果、未解決要素を検証する単体テストを追加する
   - node order と edge execution order が元コード順を保持できることを fixture で確認する。
   - unknown / unresolved、partial completeness、diagnostic が同じモデル内で表現できることを確認する。
   - FlowEdge と metadata が言語固有 object を保持しないことを型とテストで確認できる。
