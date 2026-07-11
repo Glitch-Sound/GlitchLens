@@ -1,12 +1,12 @@
 # Implementation Plan
 
 - [ ] 1. Foundation: 拡張の起動基盤とローカル実行境界を整える
-- [ ] 1.1 VS Code 側の起動口と設定を GlitchLens の可視化機能へ置き換える
+- [x] 1.1 VS Code 側の起動口と設定を GlitchLens の可視化機能へ置き換える
   - hello world の起動口を、関数フロー可視化 command、CodeLens 起動、Workspace Trust 前提の manifest 設定へ置き換える。
   - TypeScript / JavaScript だけが初期対象になるよう、対応言語と非対応言語の判定が明確になる。
   - VS Code の command palette から可視化 command が見え、未実装の外部連携や LLM 連携の起動口が存在しない状態になる。
   - _Requirements: 1.1, 1.2, 1.4, 7.3_
-- [ ] 1.2 Core logic と VS Code Integration の境界を実装時に守れる土台を作る
+- [x] 1.2 Core logic と VS Code Integration の境界を実装時に守れる土台を作る
   - VS Code API を Integration 境界へ閉じ込めるための module 境界と import 方針を実装に反映する。
   - core 側の単体テストと VS Code 統合テストを分けて実行できる状態にする。
   - `strict` TypeScript、lint、test scripts が新しい構成でも通る状態になる。

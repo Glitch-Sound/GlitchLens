@@ -1,7 +1,7 @@
 {
   "name": "glitchlens",
   "displayName": "GlitchLens",
-  "description": "Instantly visualize function execution flow as Mermaid sequence diagrams.",
+  "description": "Instantly visualize static function flow as Mermaid sequence diagrams.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.125.0"
@@ -9,15 +9,46 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:glitchlens.visualizeFunctionFlow",
+    "onLanguage:typescript",
+    "onLanguage:javascript"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "glitchlens.helloWorld",
-        "title": "Hello World"
+        "command": "glitchlens.visualizeFunctionFlow",
+        "title": "GlitchLens: Visualize Function Flow"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "GlitchLens",
+      "properties": {
+        "glitchlens.codeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show CodeLens actions for visualizing function flow."
+        },
+        "glitchlens.supportedLanguages": {
+          "type": "array",
+          "default": [
+            "typescript",
+            "javascript"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Language identifiers supported by GlitchLens function flow analysis."
+        }
+      }
+    }
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "GlitchLens runs local static analysis only. Workspace features may be limited until the workspace is trusted."
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -29,6 +60,8 @@
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "test:unit": "npm run compile-tests && mocha --ui tdd \"out/test/**/*.test.js\" --ignore \"out/test/extension.test.js\"",
+    "test:integration": "npm run compile-tests && npm run compile && npm run lint && vscode-test",
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vscode-test"
