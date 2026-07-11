@@ -25,7 +25,7 @@
   - FlowEdge と metadata が言語固有 object を保持しないことを型とテストで確認できる。
   - _Requirements: 2.2, 3.1, 3.3, 3.4, 6.1, 6.3, 6.4, 7.2_
 
-- [ ] 3. Analyzer: TypeScript / JavaScript の対象関数と静的処理フローを抽出する
+- [x] 3. Analyzer: TypeScript / JavaScript の対象関数と静的処理フローを抽出する
 - [x] 3.1 Language Analyzer 契約と analyzer selection を実装する
   - Analyzer は source file、cursor position、configuration、cancellation を受け取り、Common Flow Model と diagnostics を返す。
   - TypeScript / JavaScript の analyzer が選択され、非対応言語では解析開始前に扱える error が返る。
@@ -36,17 +36,17 @@
   - 対象関数が見つからない場合は解析を開始せずに扱える結果を返す。
   - TypeScript と JavaScript の代表的な関数宣言、関数式、arrow function で対象関数が特定できる。
   - _Requirements: 1.1, 1.2, 1.3_
-- [ ] 3.3 対象関数内の Call と制御構造を source order で抽出する
+- [x] 3.3 対象関数内の Call と制御構造を source order で抽出する
   - 関数 body の処理順序に沿って Call、Branch、Loop、Await、Return、Throw、Try/Catch を識別する。
   - Branch、Loop、Try/Catch の接続関係を FlowEdge として保持する。
   - 呼び出し先関数内部へ再帰的に入らず、対象関数内の静的処理フローだけがモデル化される。
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 7.4_
-- [ ] 3.4 未解決呼び出し、部分結果、キャンセルを Analyzer で扱う
+- [x] 3.4 未解決呼び出し、部分結果、キャンセルを Analyzer で扱う
   - 静的に解決できない呼び出しは unknown または unresolved としてモデルと diagnostic に残る。
   - 一部の statement が解析できなくても、解析済み範囲と未解析箇所を区別できる部分結果が返る。
   - cancellation が要求された場合に古い解析を中断でき、対象コードの実行や実行時トレースを行わない状態が保たれる。
   - _Requirements: 6.1, 6.3, 6.5, 7.1, 7.4, 8.3, 8.4_
-- [ ] 3.5 Analyzer の単体テストを代表構文と失敗ケースで揃える
+- [x] 3.5 Analyzer の単体テストを代表構文と失敗ケースで揃える
   - TypeScript / JavaScript の関数特定、呼び出し順、分岐、ループ、await、return、throw、try/catch を検証する。
   - unresolved、partial result、target not found、unsupported language の振る舞いがテストで確認できる。
   - 深度解析しないことと対象コードを実行しないことを fixture で確認できる。

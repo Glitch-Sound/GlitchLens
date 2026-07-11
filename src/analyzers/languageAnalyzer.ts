@@ -43,6 +43,7 @@ export const analyzerErrorKinds = [
 	'unsupported-language',
 	'analysis-not-implemented',
 	'analysis-cancelled',
+	'analysis-failed',
 	'invalid-input',
 ] as const;
 

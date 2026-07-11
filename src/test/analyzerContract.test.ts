@@ -57,21 +57,38 @@ suite('Language Analyzer contract', () => {
 		}
 	});
 
-	test('defines AnalyzerResult and AnalyzerError contracts for skeleton analyzers', async () => {
+	test('defines AnalyzerResult and AnalyzerError contracts for analyzers', async () => {
 		const analyzer = new TypeScriptAnalyzer();
 		const result = await analyzer.analyze(input('typescript'));
 
-		assert.deepStrictEqual(result, {
-			status: 'failed',
-			completeness: 'failed',
-			diagnostics: [],
-			error: {
-				kind: 'analysis-not-implemented',
-				message: 'TypeScriptAnalyzer skeleton does not perform AST analysis yet.',
-				analyzerId: 'typescript',
-				languageId: 'typescript',
-			},
-		});
+		assert.strictEqual(result.status, 'success');
+		if (result.status === 'success') {
+			assert.strictEqual(result.completeness, 'complete');
+			assert.strictEqual(result.model.metadata.analyzerId, 'typescript');
+		}
+	});
+
+	test('keeps AnalyzerResult status completeness and payload shape consistent', async () => {
+		const analyzer = new TypeScriptAnalyzer();
+		const complete = await analyzer.analyze(input('typescript'));
+		const partial = await analyzer.analyze(input('javascript', 'function sample(callbacks, index) { callbacks[index](); }'));
+		const failed = await analyzer.analyze(input('typescript', 'const outside = 1;', 3));
+		const cancelled = await analyzer.analyze({ ...input('typescript'), cancellation: { isCancellationRequested: true } });
+
+		assertResultContract(complete);
+		assertResultContract(partial);
+		assertResultContract(failed);
+		assertResultContract(cancelled);
+	});
+
+	test('returns AnalyzerError when TypeScriptAnalyzer is called directly with unsupported language', async () => {
+		const result = await new TypeScriptAnalyzer().analyze(input('python'));
+
+		assert.strictEqual(result.status, 'failed');
+		if (result.status !== 'failed') {return;}
+		assert.strictEqual(result.completeness, 'failed');
+		assert.strictEqual(result.error.kind, 'unsupported-language');
+		assert.strictEqual(result.error.languageId, 'python');
 	});
 
 	test('keeps analyzers independent from VS Code, Mermaid, WebView, and Clipboard APIs', () => {
@@ -101,17 +118,33 @@ suite('Language Analyzer contract', () => {
 
 		assert.deepStrictEqual(offenders, []);
 	});
+
+	test('does not use runtime execution or tracing APIs inside analyzers', () => {
+		const analyzerRoot = path.resolve(__dirname, '../../src/analyzers');
+		const offenders = listTypeScriptFiles(analyzerRoot).filter(file => {
+			const source = fs.readFileSync(file, 'utf8');
+
+			return /\beval\s*\(/.test(source)
+				|| /\bnew\s+Function\s*\(/.test(source)
+				|| /from ['"](?:node:)?(?:vm|child_process)['"]/.test(source)
+				|| source.includes('spawn(')
+				|| source.includes('exec(')
+				|| source.includes('traceEvents');
+		});
+
+		assert.deepStrictEqual(offenders, []);
+	});
 });
 
-function input(languageId: string): AnalyzerInput {
+function input(languageId: string, text = 'export function sample() { return 1; }', cursorOffset = 16): AnalyzerInput {
 	return {
 		source: {
 			uri: 'file:///workspace/source.ts',
 			languageId,
 			version: 1,
-			text: 'export function sample() { return 1; }',
+			text,
 		},
-		cursorOffset: 16,
+		cursorOffset,
 		configuration: {
 			configurationDigest: 'sha256:test',
 		},
@@ -119,6 +152,22 @@ function input(languageId: string): AnalyzerInput {
 			isCancellationRequested: false,
 		},
 	};
+}
+
+function assertResultContract(result: AnalyzerResult): void {
+	if (result.status === 'success' || result.status === 'partial') {
+		assert.ok('model' in result);
+		assert.strictEqual('error' in result, false);
+		assert.strictEqual(result.model.completeness, result.completeness);
+		assert.strictEqual(result.model.metadata.completeness, result.completeness);
+		assert.ok(result.completeness === 'complete' || result.completeness === 'partial');
+		return;
+	}
+
+	assert.strictEqual(result.status, 'failed');
+	assert.strictEqual(result.completeness, 'failed');
+	assert.ok('error' in result);
+	assert.ok(!('model' in result));
 }
 
 function failure(kind: AnalyzerError['kind'], message: string): Promise<AnalyzerResult> {
