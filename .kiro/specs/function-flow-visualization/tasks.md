@@ -52,14 +52,14 @@
   - 深度解析しないことと対象コードを実行しないことを fixture で確認できる。
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 6.1, 6.3, 6.5, 7.4_
 
-- [ ] 4. Renderer: Common Flow Model から Mermaid sequenceDiagram を生成する
-- [ ] 4.1 Mermaid text、source map、renderer warning を生成する
+- [x] 4. Renderer: Common Flow Model から Mermaid sequenceDiagram を生成する
+- [x] 4.1 Mermaid text、source map、renderer warning を生成する
   - FlowNode と FlowEdge の順序を使って sequenceDiagram text を生成する。
   - unknown / unresolved と順序不確定箇所が Mermaid 上で認識できる形になる。
   - Mermaid 要素と source location の対応を source map として返し、Renderer は UI 固有表示文言や VS Code API に依存しない。
   - _Depends: 2.1_
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.3, 5.2, 6.1, 6.2, 7.2_
-- [ ] 4.2 Mermaid Renderer の単体テストを追加する
+- [x] 4.2 Mermaid Renderer の単体テストを追加する
   - nodes と edges だけから Mermaid text が生成されることを確認する。
   - branch、loop、try/catch、return、throw、unknown / unresolved、partial result の出力が安定する。
   - source map と renderer warning が UI 非依存で返ることを確認できる。
