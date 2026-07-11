@@ -26,12 +26,12 @@
   - _Requirements: 2.2, 3.1, 3.3, 3.4, 6.1, 6.3, 6.4, 7.2_
 
 - [ ] 3. Analyzer: TypeScript / JavaScript の対象関数と静的処理フローを抽出する
-- [ ] 3.1 Language Analyzer 契約と analyzer selection を実装する
+- [x] 3.1 Language Analyzer 契約と analyzer selection を実装する
   - Analyzer は source file、cursor position、configuration、cancellation を受け取り、Common Flow Model と diagnostics を返す。
   - TypeScript / JavaScript の analyzer が選択され、非対応言語では解析開始前に扱える error が返る。
   - Analyzer から Mermaid、WebView、Clipboard、VS Code API へ依存しない状態になる。
   - _Requirements: 1.4, 2.1, 2.4, 6.3, 7.1, 7.2_
-- [ ] 3.2 TypeScript / JavaScript の関数特定を実装する
+- [x] 3.2 TypeScript / JavaScript の関数特定を実装する
   - CodeLens 用の関数候補 range と、カーソル位置を含む最も近い関数を解決できる。
   - 対象関数が見つからない場合は解析を開始せずに扱える結果を返す。
   - TypeScript と JavaScript の代表的な関数宣言、関数式、arrow function で対象関数が特定できる。
