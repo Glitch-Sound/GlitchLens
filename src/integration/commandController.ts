@@ -65,6 +65,7 @@ export interface CommandControllerOptions {
 
 export class CommandController {
 	private activeCancellation?: MutableCancellationSignal;
+	private activeDocumentUri?: string;
 
 	public constructor(private readonly options: CommandControllerOptions) {}
 
@@ -95,6 +96,7 @@ export class CommandController {
 		this.activeCancellation?.cancel();
 		const cancellation = new MutableCancellationSignal(externalCancellation);
 		this.activeCancellation = cancellation;
+		this.activeDocumentUri = document.uri.toString();
 
 		await this.options.progress.withProgress(async () => {
 			const result = await this.options.useCase.execute({
@@ -114,6 +116,7 @@ export class CommandController {
 				return;
 			}
 			this.activeCancellation = undefined;
+			this.activeDocumentUri = undefined;
 
 			if (isDisplayableResult(result)) {
 				await this.options.view.show(createVisualizationViewModel(result));
@@ -124,6 +127,12 @@ export class CommandController {
 			await this.options.view.show(createVisualizationViewModel(failure));
 			await this.options.notifications.showStatus(failure.status, notificationMessage(failure));
 		});
+	}
+
+	public cancelForDocument(documentUri: string): void {
+		if (this.activeDocumentUri === documentUri) {
+			this.activeCancellation?.cancel();
+		}
 	}
 }
 

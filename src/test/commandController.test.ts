@@ -121,6 +121,31 @@ suite('CommandController', () => {
 		assert.deepStrictEqual(notifications.messages, []);
 	});
 
+	test('cancels and suppresses an older result when the document changes during analysis', async () => {
+		const firstGate = deferred<VisualizationResult>();
+		const useCase = new StubUseCase(firstGate.promise);
+		const view = new StubView();
+		const notifications = new StubNotifications();
+		const progress = new StubProgress();
+		const document = textDocument('file:///workspace/source.ts', 'typescript', 1, 'function a() { oldCall(); }\n');
+		const controller = createController(useCase, { view, notifications, progress });
+		const first = controller.visualizeFromCursor({
+			document,
+			position: { line: 0, character: 15 },
+			cancellation: { isCancellationRequested: false },
+		});
+
+		controller.cancelForDocument('file:///workspace/source.ts');
+		firstGate.resolve(successResult('success'));
+		await first;
+
+		assert.deepStrictEqual(useCase.requests.map(request => request.source.version), [1]);
+		assert.strictEqual(useCase.requests[0].cancellation.isCancellationRequested, true);
+		assert.deepStrictEqual(view.results, []);
+		assert.deepStrictEqual(notifications.messages, []);
+		assert.deepStrictEqual(progress.events, ['start', 'end']);
+	});
+
 	test('starts and ends progress while passing success and partial results to the visualization view', async () => {
 		const progress = new StubProgress();
 		const view = new StubView();

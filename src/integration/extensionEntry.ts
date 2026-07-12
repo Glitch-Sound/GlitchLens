@@ -13,10 +13,17 @@ export function registerGlitchLensExtension(context: vscode.ExtensionContext): v
 	context.subscriptions.push(view);
 	registerGlitchLensCommands(context, controller);
 	registerGlitchLensCodeLensProvider(context);
+	registerDocumentChangeCancellation(context, controller);
 	registerWorkspaceTrustLifecycle(context);
 	if (probe) {
 		registerIntegrationTestSupport(context, probe, view);
 	}
+}
+
+function registerDocumentChangeCancellation(context: vscode.ExtensionContext, controller: { cancelForDocument(documentUri: string): void }): void {
+	context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(event => {
+		controller.cancelForDocument(event.document.uri.toString());
+	}));
 }
 
 function registerWorkspaceTrustLifecycle(context: vscode.ExtensionContext): void {

@@ -9,37 +9,37 @@ export class TypeScriptAnalyzer implements LanguageAnalyzer {
 	public readonly version = '0.3.0';
 	public readonly languageIds = ['typescript', 'javascript', 'typescriptreact', 'javascriptreact'] as const;
 
-	public analyze(input: AnalyzerInput): Promise<AnalyzerResult> {
+	public async analyze(input: AnalyzerInput): Promise<AnalyzerResult> {
 		try {
 			if (input.cancellation.isCancellationRequested) {
-				return Promise.resolve(cancelledResult(this.id, input.source.languageId));
+				return cancelledResult(this.id, input.source.languageId);
 			}
 			if (!this.languageIds.includes(input.source.languageId as typeof this.languageIds[number])) {
-				return Promise.resolve({ status: 'failed', completeness: 'failed', diagnostics: [], error: { kind: 'unsupported-language', message: `No TypeScript analyzer support for language "${input.source.languageId}".`, analyzerId: this.id, languageId: input.source.languageId } });
+				return { status: 'failed', completeness: 'failed', diagnostics: [], error: { kind: 'unsupported-language', message: `No TypeScript analyzer support for language "${input.source.languageId}".`, analyzerId: this.id, languageId: input.source.languageId } };
 			}
 			const languageId = input.source.languageId as typeof this.languageIds[number];
 			const sourceFile = ts.createSourceFile(input.source.uri, input.source.text, ts.ScriptTarget.Latest, true, scriptKindForLanguage(languageId));
 			const target = findFunctionContainingOffset(input.source, input.cursorOffset);
 			if (target.status !== 'found') {
-				return Promise.resolve({ status: 'failed', completeness: 'failed', diagnostics: [], error: { kind: 'invalid-input', message: `No target function found (${target.reason}).`, analyzerId: this.id, languageId: input.source.languageId } });
+				return { status: 'failed', completeness: 'failed', diagnostics: [], error: { kind: 'invalid-input', message: `No target function found (${target.reason}).`, analyzerId: this.id, languageId: input.source.languageId } };
 			}
 
 			const candidate = target.function;
 			const node = findFunctionNode(sourceFile, candidate);
 			if (!node || !node.body) {
-				return Promise.resolve({ status: 'failed', completeness: 'failed', diagnostics: [], error: { kind: 'invalid-input', message: 'The target function has no analyzable body.', analyzerId: this.id, languageId: input.source.languageId } });
+				return { status: 'failed', completeness: 'failed', diagnostics: [], error: { kind: 'invalid-input', message: 'The target function has no analyzable body.', analyzerId: this.id, languageId: input.source.languageId } };
 			}
 
 			const builder = new FlowBuilder(input, sourceFile, candidate);
-			builder.extractBody(node.body);
+			await builder.extractBody(node.body);
 			const model = builder.model();
 			const completeness = model.completeness === 'partial' ? 'partial' : 'complete';
-			return Promise.resolve({ status: completeness === 'partial' ? 'partial' : 'success', completeness, diagnostics: builder.diagnostics, model });
+			return { status: completeness === 'partial' ? 'partial' : 'success', completeness, diagnostics: builder.diagnostics, model };
 		} catch (error) {
 			if (error instanceof AnalysisCancelledError) {
-				return Promise.resolve(cancelledResult(this.id, input.source.languageId));
+				return cancelledResult(this.id, input.source.languageId);
 			}
-			return Promise.resolve({ status: 'failed', completeness: 'failed', diagnostics: [], error: { kind: 'analysis-failed', message: 'TypeScript analysis failed before a usable partial result could be produced.', analyzerId: this.id, languageId: input.source.languageId, cause: error } });
+			return { status: 'failed', completeness: 'failed', diagnostics: [], error: { kind: 'analysis-failed', message: 'TypeScript analysis failed before a usable partial result could be produced.', analyzerId: this.id, languageId: input.source.languageId, cause: error } };
 		}
 	}
 }
@@ -86,12 +86,15 @@ function isFunctionNode(node: ts.Node): node is FunctionNode {
 }
 
 class FlowBuilder {
+	private static readonly yieldEveryWorkItems = 50;
+
 	private readonly nodes: FlowNode[] = [];
 	private readonly edges: FlowEdge[] = [];
 	public readonly diagnostics: FlowDiagnostic[] = [];
 	private nextNode = 0;
 	private nextEdge = 0;
 	private nextDiagnostic = 0;
+	private workItemsSinceYield = 0;
 	private completeness: 'complete' | 'partial' = 'complete';
 	private skipNextEdge = false;
 	private readonly terminalNodeIds = new Set<string>();
@@ -110,43 +113,43 @@ class FlowBuilder {
 		};
 	}
 
-	public extractBody(body: ts.ConciseBody | ts.FunctionBody): void {
-		this.throwIfCancelled();
-		if (ts.isBlock(body)) {this.extractStatements(body.statements);}
-		else {this.extractExpression(body);}
+	public async extractBody(body: ts.ConciseBody | ts.FunctionBody): Promise<void> {
+		await this.cooperate();
+		if (ts.isBlock(body)) {await this.extractStatements(body.statements);}
+		else {await this.extractExpression(body);}
 	}
 
-	private extractStatements(statements: ts.NodeArray<ts.Statement> | readonly ts.Statement[]): void {
+	private async extractStatements(statements: ts.NodeArray<ts.Statement> | readonly ts.Statement[]): Promise<void> {
 		for (const statement of statements) {
-			this.throwIfCancelled();
-			this.extractStatement(statement);
+			await this.cooperate();
+			await this.extractStatement(statement);
 		}
 	}
 
-	private extractStatement(statement: ts.Statement): void {
-		this.throwIfCancelled();
+	private async extractStatement(statement: ts.Statement): Promise<void> {
+		await this.cooperate();
 		if (ts.isFunctionDeclaration(statement)) {return;}
 		if (ts.isWithStatement(statement)) {
 			this.addDiagnostic('unsupported-syntax', 'warning', 'Unsupported with statement was skipped during partial analysis.', statement);
 			return;
 		}
 		if (ts.isBlock(statement)) {
-			this.extractStatements(statement.statements);
+			await this.extractStatements(statement.statements);
 			return;
 		}
 		if (ts.isIfStatement(statement)) {
 			const branch = this.addNode({ kind: 'branch', condition: statement.expression.getText(this.sourceFile), node: statement });
-			this.extractCalls(statement.expression, branch.id);
+			await this.extractCalls(statement.expression, branch.id);
 			const before = this.nodes.length;
 			this.skipNextEdge = true;
-			this.extractStatement(statement.thenStatement);
+			await this.extractStatement(statement.thenStatement);
 			const thenNode = this.nodes[before];
 			if (thenNode) {this.addEdge(branch.id, thenNode.id, 'true', statement.expression);}
 			const thenExits = this.consumePendingOrTail(before, 'next');
 			const elseStart = this.nodes.length;
 			if (statement.elseStatement) {
 				this.skipNextEdge = true;
-				this.extractStatement(statement.elseStatement);
+				await this.extractStatement(statement.elseStatement);
 			}
 			const elseNode = this.nodes[elseStart];
 			if (elseNode) {this.addEdge(branch.id, elseNode.id, 'false', statement.expression);}
@@ -160,7 +163,7 @@ class FlowBuilder {
 			for (const clause of statement.caseBlock.clauses) {
 				const start = this.nodes.length;
 				this.skipNextEdge = true;
-				this.extractStatements(clause.statements);
+				await this.extractStatements(clause.statements);
 				const first = this.nodes[start];
 				if (first) {this.addEdge(branch.id, first.id, clause.kind === ts.SyntaxKind.CaseClause ? 'true' : 'false', clause);}
 				exits.push(...this.consumePendingOrTail(start, 'next'));
@@ -172,16 +175,16 @@ class FlowBuilder {
 			const expression = this.loopConditionText(statement);
 			const loop = this.addNode({ kind: 'loop', condition: expression, node: statement });
 			if (ts.isForStatement(statement)) {
-				this.extractCalls(statement.initializer, loop.id);
-				this.extractCalls(statement.condition, loop.id);
+				await this.extractCalls(statement.initializer, loop.id);
+				await this.extractCalls(statement.condition, loop.id);
 			}
-			if (!ts.isForStatement(statement) && 'expression' in statement && statement.expression) {this.extractCalls(statement.expression, loop.id);}
+			if (!ts.isForStatement(statement) && 'expression' in statement && statement.expression) {await this.extractCalls(statement.expression, loop.id);}
 			if (ts.isForStatement(statement)) {
-				this.extractCalls(statement.incrementor, loop.id);
+				await this.extractCalls(statement.incrementor, loop.id);
 			}
 			const start = this.nodes.length;
 			this.skipNextEdge = true;
-			this.extractStatement(statement.statement);
+			await this.extractStatement(statement.statement);
 			const first = this.nodes[start];
 			if (first) {this.addEdge(loop.id, first.id, 'loop-body', statement);}
 			const bodyExits = this.consumePendingOrTail(start, 'loop-body');
@@ -194,14 +197,14 @@ class FlowBuilder {
 			const tails: PendingEdge[] = [];
 			const tryStart = this.nodes.length;
 			this.skipNextEdge = true;
-			this.extractStatements(statement.tryBlock.statements);
+			await this.extractStatements(statement.tryBlock.statements);
 			const tryNode = this.nodes[tryStart];
 			if (tryNode) {this.addEdge(control.id, tryNode.id, 'try', statement.tryBlock);}
 			tails.push(...this.consumePendingOrTail(tryStart, 'next'));
 			if (statement.catchClause) {
 				const catchStart = this.nodes.length;
 				this.skipNextEdge = true;
-				this.extractStatements(statement.catchClause.block.statements);
+				await this.extractStatements(statement.catchClause.block.statements);
 				const catchNode = this.nodes[catchStart];
 				if (catchNode) {this.addEdge(control.id, catchNode.id, 'catch', statement.catchClause);}
 				tails.push(...this.consumePendingOrTail(catchStart, 'next'));
@@ -209,7 +212,7 @@ class FlowBuilder {
 			if (statement.finallyBlock) {
 				const finallyStart = this.nodes.length;
 				this.skipNextEdge = true;
-				this.extractStatements(statement.finallyBlock.statements);
+				await this.extractStatements(statement.finallyBlock.statements);
 				const finallyNode = this.nodes[finallyStart];
 				if (finallyNode) {this.addEdge(control.id, finallyNode.id, 'finally', statement.finallyBlock);}
 				const finallyExits = this.consumePendingOrTail(finallyStart, 'next');
@@ -221,32 +224,32 @@ class FlowBuilder {
 			return;
 		}
 		if (ts.isReturnStatement(statement)) {
-			this.extractCalls(statement.expression, undefined);
+			await this.extractCalls(statement.expression, undefined);
 			const node = this.addNode({ kind: 'return', expression: statement.expression?.getText(this.sourceFile), node: statement });
 			this.addEdge(node.id, node.id, 'return', statement);
 			this.terminalNodeIds.add(node.id);
 			return;
 		}
 		if (ts.isThrowStatement(statement)) {
-			this.extractCalls(statement.expression, undefined);
+			await this.extractCalls(statement.expression, undefined);
 			const node = this.addNode({ kind: 'throw', expression: statement.expression.getText(this.sourceFile), node: statement });
 			this.addEdge(node.id, node.id, 'throw', statement);
 			this.terminalNodeIds.add(node.id);
 			return;
 		}
-		this.extractCalls(statement, undefined);
+		await this.extractCalls(statement, undefined);
 	}
 
-	private extractExpression(expression: ts.Expression): void { this.extractCalls(expression, undefined); }
+	private async extractExpression(expression: ts.Expression): Promise<void> { await this.extractCalls(expression, undefined); }
 
-	private extractCalls(root: ts.Node | undefined, ownerId: string | undefined): void {
+	private async extractCalls(root: ts.Node | undefined, ownerId: string | undefined): Promise<void> {
 		if (!root) {return;}
-		const visit = (node: ts.Node): void => {
-			this.throwIfCancelled();
+		const visit = async (node: ts.Node): Promise<void> => {
+			await this.cooperate();
 			if (isFunctionNode(node)) {return;}
 			if (ts.isAwaitExpression(node)) {
 				const awaitNode = this.addNode({ kind: 'await', expression: node.expression.getText(this.sourceFile), node });
-				this.extractCalls(node.expression, awaitNode.id);
+				await this.extractCalls(node.expression, awaitNode.id);
 				return;
 			}
 			if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
@@ -257,12 +260,12 @@ class FlowBuilder {
 					this.addDiagnostic(callInfo.resolution === 'unknown' ? 'unknown-call' : 'unresolved-call', 'warning', callInfo.message, node, call.id);
 				}
 				if (ownerId) {this.addEdge(ownerId, call.id, 'next', node);}
-				ts.forEachChild(node, visit);
+				for (const child of childNodes(node)) {await visit(child);}
 				return;
 			}
-			ts.forEachChild(node, visit);
+			for (const child of childNodes(node)) {await visit(child);}
 		};
-		visit(root);
+		await visit(root);
 	}
 
 	private addNode(data: { kind: FlowNode['kind']; node: ts.Node; condition?: string; expression?: string; catchBinding?: string; hasFinally?: boolean; calleeName?: string; resolution?: 'resolved' | 'unknown' | 'unresolved'; label?: string }): FlowNode {
@@ -395,6 +398,17 @@ class FlowBuilder {
 			throw new AnalysisCancelledError();
 		}
 	}
+
+	private async cooperate(): Promise<void> {
+		this.throwIfCancelled();
+		this.workItemsSinceYield += 1;
+		if (this.workItemsSinceYield < FlowBuilder.yieldEveryWorkItems) {
+			return;
+		}
+		this.workItemsSinceYield = 0;
+		await yieldToEventLoop();
+		this.throwIfCancelled();
+	}
 }
 
 interface PendingEdge {
@@ -414,6 +428,20 @@ function isOptionalCall(node: ts.CallExpression | ts.NewExpression): boolean {
 
 function isOptionalAccess(expression: ts.Expression): boolean {
 	return (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) && Boolean(expression.questionDotToken);
+}
+
+function childNodes(node: ts.Node): ts.Node[] {
+	const children: ts.Node[] = [];
+	node.forEachChild(child => {
+		children.push(child);
+	});
+	return children;
+}
+
+function yieldToEventLoop(): Promise<void> {
+	return new Promise(resolve => {
+		setImmediate(resolve);
+	});
 }
 
 function edgeKindOrder(kind: FlowEdge['kind']): number {

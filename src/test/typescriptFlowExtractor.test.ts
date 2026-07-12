@@ -329,6 +329,50 @@ suite('TypeScriptAnalyzer unresolved partial and cancellation handling', () => {
 	});
 });
 
+suite('TypeScriptAnalyzer responsiveness validation', () => {
+	test('returns complete or partial results for a large complex function with user-visible unresolved locations', async () => {
+		const result = await analyze(largeComplexFunction(), 'typescript', 30);
+
+		assert.ok(result.status === 'success' || result.status === 'partial');
+		if (result.status !== 'success' && result.status !== 'partial') {return;}
+		assert.ok(result.model.nodes.length > 150);
+		assert.ok(result.model.nodes.some(node => node.kind === 'branch'));
+		assert.ok(result.model.nodes.some(node => node.kind === 'loop'));
+		assert.ok(result.model.nodes.some(node => node.kind === 'try-catch'));
+		assert.ok(result.model.nodes.some(node => node.kind === 'call' && node.calleeName === 'deepCall'));
+		assert.ok(!result.model.nodes.some(node => node.kind === 'call' && node.calleeName === 'calleeInternal'));
+		assert.strictEqual(result.model.source.documentVersion, 1);
+		assert.deepStrictEqual(result.model.nodes.map(node => node.order), result.model.nodes.map((_, index) => index));
+		assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call' && diagnostic.sourceLocation));
+		assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unsupported-syntax' && diagnostic.sourceLocation));
+	});
+
+	test('handles deeply nested branches without stack overflow', async () => {
+		const source = deeplyNestedFunction(220);
+		const result = await analyze(source, 'javascript', 20);
+
+		assert.ok(result.status === 'success' || result.status === 'partial');
+		if (result.status !== 'success' && result.status !== 'partial') {return;}
+		assert.ok(result.model.nodes.filter(node => node.kind === 'branch').length >= 200);
+		assert.ok(result.model.nodes.some(node => node.kind === 'call' && node.calleeName === 'leaf'));
+	});
+
+	test('yields to the event loop so cancellation can interrupt many calls', async () => {
+		const cancellation = { isCancellationRequested: false };
+		const analysis = analyze(manyCallsFunction(600), 'typescript', 20, cancellation);
+		setImmediate(() => {
+			cancellation.isCancellationRequested = true;
+		});
+
+		const result = await analysis;
+
+		assert.strictEqual(result.status, 'failed');
+		if (result.status !== 'failed') {return;}
+		assert.strictEqual(result.error.kind, 'analysis-cancelled');
+		assert.strictEqual(result.completeness, 'failed');
+	});
+});
+
 async function analyze(text: string, languageId: 'typescript' | 'javascript', cursorOffset: number, cancellation: AnalyzerInput['cancellation'] = { isCancellationRequested: false }) {
 	const input: AnalyzerInput = {
 		source: { uri: `file:///workspace/source.${languageId === 'typescript' ? 'ts' : 'js'}`, languageId, version: 1, text },
@@ -337,4 +381,58 @@ async function analyze(text: string, languageId: 'typescript' | 'javascript', cu
 		cancellation,
 	};
 	return new TypeScriptAnalyzer().analyze(input);
+}
+
+function largeComplexFunction(): string {
+	const repeatedCalls = Array.from({ length: 180 }, (_, index) => `step${index}(input);`).join('\n');
+	return `function target(input, dynamicMap, key) {
+	prepare(input);
+	if (input.ready) {
+		for (const item of input.items) {
+			if (item.enabled) {
+				deepCall(item);
+			} else {
+				skip(item);
+			}
+		}
+	} else {
+		fallback(input);
+	}
+	while (input.next()) {
+		poll(input);
+	}
+	try {
+		risky(input);
+		dynamicMap[key].run();
+		with (input) {
+			hidden();
+		}
+	} catch (error) {
+		recover(error);
+	} finally {
+		cleanup(input);
+	}
+	${repeatedCalls}
+	return finish(input);
+}
+function deepCall(value) {
+	calleeInternal(value);
+}`;
+}
+
+function deeplyNestedFunction(depth: number): string {
+	const open = Array.from({ length: depth }, (_, index) => `if (flag${index}) {`).join('\n');
+	const close = Array.from({ length: depth }, () => '}').join('\n');
+	return `function target() {
+${open}
+leaf();
+${close}
+}`;
+}
+
+function manyCallsFunction(count: number): string {
+	const calls = Array.from({ length: count }, (_, index) => `call${index}();`).join('\n');
+	return `function target() {
+${calls}
+}`;
 }
