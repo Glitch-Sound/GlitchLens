@@ -58,18 +58,101 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes("default-src 'none'"));
 		assert.ok(/script-src 'nonce-[A-Za-z0-9]+'/.test(html));
 		assert.ok(html.includes('style-src'));
-		assert.ok(html.includes('<svg role="img" aria-label="Mermaid sequence diagram"'));
+		assert.ok(html.includes('class="mermaid-render-target" aria-label="Mermaid sequence diagram"'));
 		assert.ok(html.includes('Copy Mermaid'));
 		assert.ok(html.includes('<details class="diagram-fallback">'));
-		assert.ok(html.includes('<details class="source-map" open>'));
-		assert.ok(html.includes('line:1: file:///workspace/source.ts:2:3-2:9'));
-		assert.ok(!html.includes('https://'));
-		assert.ok(!html.includes('http://'));
+		assert.ok(!html.includes('<details class="source-map" open>'));
+		assert.ok(!html.includes('Source locations'));
+		assert.ok(!html.includes('line:1: file:///workspace/source.ts:2:3-2:9'));
+		assert.ok(!html.includes('.source-map'));
+		assert.ok(html.includes('"sourceMap":[{"elementId":"line:1"'));
+		assertNoExternalResourceReferences(html);
 		assert.ok(!html.includes('<script>alert(1)</script>'));
 		assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
 		assert.ok(html.includes('&lt;b&gt;unknown&lt;/b&gt;'));
 		assert.deepStrictEqual(factory.options.localResourceRoots, []);
 		assert.strictEqual(factory.options.enableScripts, true);
+	});
+
+	test('bundles official Mermaid renderer with safe initialization and text fallback', () => {
+		const webviewSource = fs.readFileSync(path.resolve(__dirname, '../../src/integration/webviewMermaid.js'), 'utf8');
+		const viewSource = fs.readFileSync(path.resolve(__dirname, '../../src/integration/visualizationView.ts'), 'utf8');
+
+		assert.ok(webviewSource.includes("import mermaid from 'mermaid'"));
+		assert.ok(webviewSource.includes("securityLevel: 'strict'"));
+		assert.ok(webviewSource.includes("theme: 'base'"));
+		assert.ok(webviewSource.includes('getComputedStyle(document.documentElement)'));
+		assert.ok(webviewSource.includes('let mermaidInitialized = false'));
+		assert.ok(webviewSource.includes('if (!mermaidInitialized)'));
+		assert.ok(webviewSource.includes('showFallback(diagram, mermaidText)'));
+		assert.ok(webviewSource.includes("value === 'currentColor'"));
+		assert.ok(webviewSource.includes("value.includes('var(')"));
+		assert.ok(webviewSource.includes("background: '#1e1e1e'"));
+		assert.ok(!webviewSource.match(/\b[a-zA-Z]+:\s*['"]currentColor['"]/));
+		assert.ok(!webviewSource.match(/\b[a-zA-Z]+:\s*['"]var\(--vscode-/));
+		assert.ok(webviewSource.includes('mermaid.render'));
+		assert.ok(webviewSource.includes('decorateSequenceControls(diagram)'));
+		assert.ok(webviewSource.includes('glitchlens-control-loop'));
+		assert.ok(webviewSource.includes('glitchlens-control-alt'));
+		assert.ok(webviewSource.includes('glitchlens-control-opt'));
+		assert.ok(webviewSource.includes('glitchlens-control-critical'));
+		assert.ok(webviewSource.includes('glitchlens-control-option'));
+		assert.ok(webviewSource.includes("text.closest('g')"));
+		assert.ok(webviewSource.includes('addNonceToSvgStyles'));
+		assert.ok(webviewSource.includes("style.setAttribute('nonce', nonce)"));
+		assert.ok(webviewSource.includes('showFallback(diagram, mermaidText)'));
+		assert.ok(viewSource.includes('readWebviewMermaidScript'));
+		assert.ok(!viewSource.includes('https://cdn'));
+		assert.ok(!viewSource.includes('unpkg.com'));
+		assert.ok(!viewSource.includes('jsdelivr'));
+	});
+
+	test('keeps advanced Mermaid control syntax as render input for Webview Mermaid', async () => {
+		const factory = new StubPanelFactory();
+		const adapter = new WebviewVisualizationAdapter(factory, new StubClipboard(), new StubNotification());
+		const mermaidText = [
+			'sequenceDiagram',
+			'participant root as processOrders',
+			'loop orders',
+			'critical try',
+			'opt order.amount <= 0',
+			'root->>root: continue',
+			'end',
+			'alt order.status === "new"',
+			'root->>charge: charge',
+			'else',
+			'root->>notify: notify',
+			'end',
+			'loop retry < 3',
+			'root->>save: save',
+			'opt saved',
+			'root->>root: break',
+			'end',
+			'end',
+			'option catch error',
+			'root->>error: error',
+			'end',
+			'end',
+			'',
+		].join('\n');
+
+		await adapter.show(createVisualizationViewModel(successResult('success', { mermaidText })));
+
+		const html = factory.panel.webview.html;
+		assert.ok(html.includes('loop orders'));
+		assert.ok(html.includes('opt order.amount \\u003c= 0'));
+		assert.ok(html.includes('alt order.status === \\\"new\\\"'));
+		assert.ok(html.includes('else'));
+		assert.ok(html.includes('critical try'));
+		assert.ok(html.includes('option catch error'));
+		assert.ok(html.includes('loop retry \\u003c 3'));
+		assert.ok(html.includes('.glitchlens-control-loop :is(rect,path,line,polygon){stroke:#4ea1ff!important;fill:#102a44!important;}'));
+		assert.ok(html.includes('.glitchlens-control-alt :is(rect,path,line,polygon){stroke:#2dd4e8!important;fill:#0d3440!important;}'));
+		assert.ok(html.includes('.glitchlens-control-opt :is(rect,path,line,polygon){stroke:#facc15!important;fill:#3b3208!important;}'));
+		assert.ok(html.includes('.glitchlens-control-critical :is(rect,path,line,polygon){stroke:#a78bfa!important;fill:#2e225e!important;}'));
+		assert.ok(html.includes('.glitchlens-control-option :is(rect,path,line,polygon){stroke:#f472b6!important;fill:#4a1232!important;}'));
+		assert.ok(/"cspNonce":"[A-Za-z0-9]+"/.test(html));
+		assert.ok(!html.includes('<svg role="img" aria-label="Mermaid sequence diagram"'));
 	});
 
 	test('reuses the same panel and replaces stale content safely', async () => {
@@ -481,6 +564,13 @@ function assertNoForbiddenModelObjects(value: VisualizationViewModel): void {
 	assert.ok(!text.includes('"edges"'));
 	assert.ok(!text.includes('"diagnostics"'));
 	assert.ok(!text.includes('"metadata"'));
+}
+
+function assertNoExternalResourceReferences(html: string): void {
+	assert.ok(!/\s(?:src|href)=["']https?:\/\//i.test(html));
+	assert.ok(!/connect-src[^"']*https?:\/\//i.test(html));
+	assert.ok(!/default-src[^"']*https?:\/\//i.test(html));
+	assert.ok(!/script-src[^"']*https?:\/\//i.test(html));
 }
 
 function readTree(root: string): string[] {

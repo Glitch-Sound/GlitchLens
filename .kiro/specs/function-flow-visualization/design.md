@@ -317,6 +317,13 @@ interface CommandController {
 - 将来 Sidebar、Panel、Custom Editor へ変更しても、Application、Analyzer、Renderer を変更しない。
 - Webview adapter では CSP、nonce、`localResourceRoots` 最小化を適用する。
 - 表示 UI は Analyzer 固有データ、Renderer の戻り値、FlowDiagnostic、RendererWarning を直接受け取らず、Application が生成した `VisualizationViewModel` とユーザー向け `VisualizationNotice` だけを扱う。
+- Mermaid sequence diagram の描画は Webview 内でローカル bundle された Mermaid 公式 Renderer を使用し、外部 CDN や外部ネットワークを使用しない。
+- Mermaid 初期化時の theme variables は VS Code theme から解決済みの実色だけを渡し、`currentColor` や未解決の CSS variable は渡さない。実色として解決できない場合は Dark Theme に馴染む安全な fallback 色を使用する。
+- Mermaid 描画に失敗した場合は、Application や Renderer の契約を変更せず、表示層で Mermaid text を fallback 表示する。
+- Mermaid text、Common Flow Model、Renderer contract は表示改善のために変更しない。制御構造の配色と装飾は Visualization / Webview 層の責務とする。
+- `loop`、`alt`、`opt`、`critical`、`option` は Webview が描画済み SVG を装飾し、種類ごとに異なるアクセントカラーを枠線、ラベル、必要な文字色へ適用する。
+- `SourceMap` は内部データとして `VisualizationViewModel` に保持するが、Marketplace 公開版の Webview では画面下部の Source locations 一覧を表示しない。
+- Copy Mermaid は表示中の Mermaid text をコピーする既存操作として維持し、SVG 装飾や Source locations 非表示の影響を受けない。
 
 #### ClipboardAdapter
 

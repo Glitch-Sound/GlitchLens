@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
 import type { VisualizationNotice, VisualizationResult } from '../application';
 import { createWorkspaceTrustGuard, type WorkspaceTrustGuard } from './workspaceTrustPolicy';
 
@@ -247,15 +250,35 @@ function toViewNotice(notice: VisualizationNotice): VisualizationViewNotice {
 
 function renderHtml(model: VisualizationViewModel, nonce: string, viewId: string): string {
 	const canCopy = canCopyMermaid(model);
-	const payload = JSON.stringify({ ...model, viewId }).replace(/</g, '\\u003c');
-	const diagramMarkup = model.renderMode === 'mermaid' ? renderSequenceDiagram(model.mermaidText ?? '') : '';
+	const payload = JSON.stringify({ ...model, viewId, cspNonce: nonce }).replace(/</g, '\\u003c');
+	const diagramMarkup = model.renderMode === 'mermaid' ? '<div class="mermaid-render-target" aria-label="Mermaid sequence diagram"></div>' : '';
+	const webviewScript = readWebviewMermaidScript();
+	const styles = [
+		'body{font-family:var(--vscode-font-family);padding:16px;color:var(--vscode-foreground);}',
+		'pre{white-space:pre-wrap;border:1px solid var(--vscode-panel-border);padding:8px;overflow:auto;}',
+		'#diagram{overflow:auto;}',
+		'#diagram svg{max-width:100%;height:auto;border:1px solid var(--vscode-panel-border);background:var(--vscode-editor-background);}',
+		'.mermaid-render-target{min-height:160px;border:1px solid var(--vscode-panel-border);background:var(--vscode-editor-background);}',
+		'.notice{margin:4px 0;padding:4px 0;}',
+		'.diagram-fallback{margin-top:12px;}',
+		'.glitchlens-control-loop :is(rect,path,line,polygon){stroke:#4ea1ff!important;fill:#102a44!important;}',
+		'.glitchlens-control-alt :is(rect,path,line,polygon){stroke:#2dd4e8!important;fill:#0d3440!important;}',
+		'.glitchlens-control-opt :is(rect,path,line,polygon){stroke:#facc15!important;fill:#3b3208!important;}',
+		'.glitchlens-control-critical :is(rect,path,line,polygon){stroke:#a78bfa!important;fill:#2e225e!important;}',
+		'.glitchlens-control-option :is(rect,path,line,polygon){stroke:#f472b6!important;fill:#4a1232!important;}',
+		'.glitchlens-control-loop text{fill:#9fd0ff!important;}',
+		'.glitchlens-control-alt text{fill:#8ff2ff!important;}',
+		'.glitchlens-control-opt text{fill:#fde68a!important;}',
+		'.glitchlens-control-critical text{fill:#ddd6fe!important;}',
+		'.glitchlens-control-option text{fill:#fbcfe8!important;}',
+	].join('');
 	return [
 		'<!DOCTYPE html>',
 		'<html lang="en">',
 		'<head>',
 		'<meta charset="UTF-8">',
 		`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">`,
-		`<style nonce="${nonce}">body{font-family:var(--vscode-font-family);padding:16px;color:var(--vscode-foreground);}pre{white-space:pre-wrap;border:1px solid var(--vscode-panel-border);padding:8px;overflow:auto;}svg{max-width:100%;height:auto;border:1px solid var(--vscode-panel-border);background:var(--vscode-editor-background);} .notice{margin:4px 0;padding:4px 0;} .diagram-fallback{margin-top:12px;} .source-map{margin-top:12px;} .source-map li{margin:3px 0;}</style>`,
+		`<style nonce="${nonce}">${styles}</style>`,
 		'</head>',
 		'<body>',
 		`<h1>${escapeHtml(model.rootFunctionName ?? 'GlitchLens')}</h1>`,
@@ -266,8 +289,8 @@ function renderHtml(model: VisualizationViewModel, nonce: string, viewId: string
 		'<section>',
 		...model.notices.map(notice => `<div class="notice" data-kind="${escapeHtml(notice.kind)}">${escapeHtml(notice.message)}</div>`),
 		'</section>',
-		renderSourceMap(model.sourceMap),
 		`<script nonce="${nonce}">const GLITCHLENS_VIEW_MODEL=${payload};const vscode=acquireVsCodeApi();document.getElementById('copy-mermaid')?.addEventListener('click',()=>{vscode.postMessage({type:'copyMermaid',viewId:GLITCHLENS_VIEW_MODEL.viewId});});window.addEventListener('error',()=>{document.body.dataset.render='fallback';});</script>`,
+		webviewScript ? `<script nonce="${nonce}">${webviewScript}</script>` : `<script nonce="${nonce}">document.body.dataset.render='fallback';</script>`,
 		'</body>',
 		'</html>',
 	].join('');
@@ -277,85 +300,12 @@ function canCopyMermaid(model: VisualizationViewModel): boolean {
 	return model.canCopyMermaid && typeof model.mermaidText === 'string' && model.mermaidText.length > 0;
 }
 
-function renderSequenceDiagram(mermaidText: string): string {
-	const messages = parseMermaidMessages(mermaidText);
-	if (messages.length === 0) {
+function readWebviewMermaidScript(): string {
+	try {
+		return fs.readFileSync(path.join(__dirname, 'webviewMermaid.js'), 'utf8');
+	} catch {
 		return '';
 	}
-	const participantNames = unique(messages.flatMap(message => [message.from, message.to]));
-	const width = Math.max(420, participantNames.length * 180);
-	const height = 120 + messages.length * 64;
-	const xByName = new Map(participantNames.map((name, index) => [name, 90 + index * 180]));
-	const parts: string[] = [
-		`<svg role="img" aria-label="Mermaid sequence diagram" viewBox="0 0 ${width} ${height}">`,
-		'<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>',
-	];
-	for (const name of participantNames) {
-		const x = xByName.get(name) ?? 90;
-		parts.push(`<rect x="${x - 58}" y="16" width="116" height="32" rx="4" fill="transparent" stroke="currentColor"/>`);
-		parts.push(`<text x="${x}" y="37" text-anchor="middle" fill="currentColor">${escapeHtml(name)}</text>`);
-		parts.push(`<line x1="${x}" y1="52" x2="${x}" y2="${height - 28}" stroke="currentColor" stroke-dasharray="4 4" opacity="0.45"/>`);
-	}
-	messages.forEach((message, index) => {
-		const y = 86 + index * 64;
-		const fromX = xByName.get(message.from) ?? 90;
-		const toX = xByName.get(message.to) ?? fromX;
-		const textX = (fromX + toX) / 2;
-		const strokeDash = message.arrow.startsWith('--') ? ' stroke-dasharray="6 4"' : '';
-		parts.push(`<line x1="${fromX}" y1="${y}" x2="${toX}" y2="${y}" stroke="currentColor"${strokeDash} marker-end="url(#arrow)"/>`);
-		parts.push(`<text x="${textX}" y="${y - 8}" text-anchor="middle" fill="currentColor">${escapeHtml(message.label)}</text>`);
-	});
-	parts.push('</svg>');
-	return parts.join('');
-}
-
-function parseMermaidMessages(mermaidText: string): readonly MermaidMessage[] {
-	return mermaidText
-		.split(/\r?\n/)
-		.map(line => line.trim())
-		.map(line => line.match(/^(.+?)(-->>|->>|-->|->)(.+?):(.*)$/))
-		.filter((match): match is RegExpMatchArray => Boolean(match))
-		.map(match => ({
-			from: normalizeParticipant(match[1]),
-			arrow: match[2] ?? '->>',
-			to: normalizeParticipant(match[3]),
-			label: (match[4] ?? '').trim(),
-		}));
-}
-
-interface MermaidMessage {
-	readonly from: string;
-	readonly arrow: string;
-	readonly to: string;
-	readonly label: string;
-}
-
-function normalizeParticipant(value: string): string {
-	return value.trim().replace(/^participant\s+/i, '');
-}
-
-function unique(values: readonly string[]): readonly string[] {
-	return [...new Set(values.filter(value => value.length > 0))];
-}
-
-function renderSourceMap(sourceMap: readonly VisualizationSourceMapEntry[]): string {
-	if (sourceMap.length === 0) {
-		return '';
-	}
-	return [
-		'<details class="source-map" open>',
-		'<summary>Source locations</summary>',
-		'<ul>',
-		...sourceMap.map(entry => `<li data-element-id="${escapeHtml(entry.elementId)}">${escapeHtml(entry.elementId)}: ${escapeHtml(formatSourceLocation(entry.sourceLocation))}</li>`),
-		'</ul>',
-		'</details>',
-	].join('');
-}
-
-function formatSourceLocation(sourceLocation: VisualizationSourceLocation): string {
-	const start = sourceLocation.range.start;
-	const end = sourceLocation.range.end;
-	return `${sourceLocation.uri}:${start.line + 1}:${start.character + 1}-${end.line + 1}:${end.character + 1}`;
 }
 
 function parseAllowedMessage(message: unknown): AllowedWebviewMessage | undefined {

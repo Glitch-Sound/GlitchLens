@@ -18,6 +18,9 @@ suite('Common Flow Model contract', () => {
 			'await',
 			'return',
 			'throw',
+			'break',
+			'continue',
+			'expression',
 			'try-catch',
 		]);
 		assert.deepStrictEqual(flowEdgeKinds, [
@@ -106,10 +109,29 @@ suite('Common Flow Model contract', () => {
 					sourceLocation: sourceLocation(1, 0, 11, 1),
 				},
 				{
+					id: 'node:break',
+					kind: 'break',
+					order: 8,
+					sourceLocation: sourceLocation(12, 2, 12, 8),
+				},
+				{
+					id: 'node:continue',
+					kind: 'continue',
+					order: 9,
+					sourceLocation: sourceLocation(13, 2, 13, 11),
+				},
+				{
+					id: 'node:expression',
+					kind: 'expression',
+					order: 10,
+					sourceLocation: sourceLocation(14, 2, 14, 10),
+					expression: 'retry++',
+				},
+				{
 					id: 'node:unknown',
 					kind: 'call',
-					order: 8,
-					sourceLocation: sourceLocation(12, 2, 12, 18),
+					order: 11,
+					sourceLocation: sourceLocation(15, 2, 15, 18),
 					calleeName: 'dynamicCall',
 					resolution: 'unknown',
 				},
@@ -147,7 +169,7 @@ suite('Common Flow Model contract', () => {
 					severity: 'warning',
 					message: 'Call target could not be resolved statically.',
 					nodeId: 'node:unknown',
-					sourceLocation: sourceLocation(12, 2, 12, 18),
+					sourceLocation: sourceLocation(15, 2, 15, 18),
 				},
 			],
 			source: {
@@ -158,7 +180,7 @@ suite('Common Flow Model contract', () => {
 			completeness: 'partial',
 		};
 
-		assert.strictEqual(sample.nodes.length, 8);
+		assert.strictEqual(sample.nodes.length, 11);
 		assert.strictEqual(sample.edges[2].kind, 'loop-body');
 		assert.strictEqual(sample.metadata.analyzerVersion, '0.1.0');
 		assert.strictEqual(sample.diagnostics[0].kind, 'unknown-call');

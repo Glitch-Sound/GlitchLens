@@ -9,6 +9,9 @@ export const flowNodeKinds = [
 	'await',
 	'return',
 	'throw',
+	'break',
+	'continue',
+	'expression',
 	'try-catch',
 ] as const;
 
@@ -58,6 +61,21 @@ export interface FlowThrowNode extends BaseFlowNode {
 	readonly expression?: string;
 }
 
+export interface FlowBreakNode extends BaseFlowNode {
+	readonly kind: 'break';
+	readonly label?: string;
+}
+
+export interface FlowContinueNode extends BaseFlowNode {
+	readonly kind: 'continue';
+	readonly label?: string;
+}
+
+export interface FlowExpressionNode extends BaseFlowNode {
+	readonly kind: 'expression';
+	readonly expression: string;
+}
+
 export interface FlowTryCatchNode extends BaseFlowNode {
 	readonly kind: 'try-catch';
 	readonly catchBinding?: string;
@@ -71,6 +89,9 @@ export type FlowNode =
 	| FlowAwaitNode
 	| FlowReturnNode
 	| FlowThrowNode
+	| FlowBreakNode
+	| FlowContinueNode
+	| FlowExpressionNode
 	| FlowTryCatchNode;
 
 export function isFlowNodeKind(value: string): value is FlowNodeKind {

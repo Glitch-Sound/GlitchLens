@@ -6,7 +6,7 @@ import type { FlowDiagnostic, FlowEdge, FlowNode, FlowModel, FlowFunction, Sourc
 
 export class TypeScriptAnalyzer implements LanguageAnalyzer {
 	public readonly id = 'typescript';
-	public readonly version = '0.3.0';
+	public readonly version = '0.3.2';
 	public readonly languageIds = ['typescript', 'javascript', 'typescriptreact', 'javascriptreact'] as const;
 
 	public async analyze(input: AnalyzerInput): Promise<AnalyzerResult> {
@@ -107,7 +107,7 @@ class FlowBuilder {
 		const rootFunction: FlowFunction = { id: `function:${this.candidate.range.startOffset}`, name: this.candidate.name, sourceLocation: this.location(this.candidate.range.startOffset, this.candidate.range.endOffset, this.candidate.name) };
 		const edges = this.orderedEdges();
 		return {
-			metadata: { schemaVersion: '1.0.0', analyzerId: 'typescript', analyzerVersion: '0.3.0', languageId, generatedAt: new Date().toISOString(), sourceDocumentVersion: this.input.source.version, completeness: this.completeness, configurationDigest: this.input.configuration.configurationDigest, rootFunctionIdentifier: rootFunction.id },
+			metadata: { schemaVersion: '1.0.0', analyzerId: 'typescript', analyzerVersion: '0.3.2', languageId, generatedAt: new Date().toISOString(), sourceDocumentVersion: this.input.source.version, completeness: this.completeness, configurationDigest: this.input.configuration.configurationDigest, rootFunctionIdentifier: rootFunction.id },
 			rootFunction, nodes: this.nodes, edges, diagnostics: this.diagnostics,
 			source: { uri: this.input.source.uri, languageId, documentVersion: this.input.source.version }, completeness: this.completeness,
 		};
@@ -187,8 +187,7 @@ class FlowBuilder {
 			await this.extractStatement(statement.statement);
 			const first = this.nodes[start];
 			if (first) {this.addEdge(loop.id, first.id, 'loop-body', statement);}
-			const bodyExits = this.consumePendingOrTail(start, 'loop-body');
-			for (const edge of bodyExits) {this.addEdge(edge.sourceNodeId, loop.id, 'loop-body', statement);}
+			this.consumePendingOrTail(start, 'loop-body');
 			this.pendingNextEdges = [{ sourceNodeId: loop.id, kind: 'loop-exit' }];
 			return;
 		}
@@ -237,6 +236,24 @@ class FlowBuilder {
 			this.terminalNodeIds.add(node.id);
 			return;
 		}
+		if (ts.isBreakStatement(statement)) {
+			const node = this.addNode({ kind: 'break', label: statement.label?.getText(this.sourceFile), node: statement });
+			this.terminalNodeIds.add(node.id);
+			return;
+		}
+		if (ts.isContinueStatement(statement)) {
+			const node = this.addNode({ kind: 'continue', label: statement.label?.getText(this.sourceFile), node: statement });
+			this.terminalNodeIds.add(node.id);
+			return;
+		}
+		if (ts.isExpressionStatement(statement)) {
+			const before = this.nodes.length;
+			await this.extractCalls(statement.expression, undefined);
+			if (this.nodes.length === before) {
+				this.addNode({ kind: 'expression', expression: statement.expression.getText(this.sourceFile), node: statement });
+			}
+			return;
+		}
 		await this.extractCalls(statement, undefined);
 	}
 
@@ -279,6 +296,9 @@ class FlowBuilder {
 			case 'await': node = { ...base, kind: 'await', expression: data.expression }; break;
 			case 'return': node = { ...base, kind: 'return', expression: data.expression }; break;
 			case 'throw': node = { ...base, kind: 'throw', expression: data.expression }; break;
+			case 'break': node = { ...base, kind: 'break', label: data.label }; break;
+			case 'continue': node = { ...base, kind: 'continue', label: data.label }; break;
+			case 'expression': node = { ...base, kind: 'expression', expression: data.expression ?? data.node.getText(this.sourceFile) }; break;
 			case 'try-catch': node = { ...base, kind: 'try-catch', catchBinding: data.catchBinding, hasFinally: data.hasFinally }; break;
 		}
 		this.nodes.push(node);

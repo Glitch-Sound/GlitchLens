@@ -565,7 +565,7 @@ function createModel(overrides: Partial<FlowModel> = {}): FlowModel {
 		metadata: {
 			schemaVersion: '1.0.0',
 			analyzerId: 'typescript',
-			analyzerVersion: '0.3.0',
+			analyzerVersion: '0.3.2',
 			languageId: 'typescript',
 			generatedAt: '2026-07-12T00:00:00.000Z',
 			sourceDocumentVersion: 1,

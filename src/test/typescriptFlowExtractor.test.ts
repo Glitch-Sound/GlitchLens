@@ -143,6 +143,29 @@ suite('TypeScriptAnalyzer static flow extraction', () => {
 		assert.ok(result.model.edges.some(edge => edge.sourceNodeId === loop?.id && edge.targetNodeId === after?.id && edge.kind === 'loop-exit'));
 	});
 
+	test('keeps loop-body edges directed from the loop node to the body entry', async () => {
+		const result = await analyze(`function target(items) { for (const item of items) { visit(item); } }`, 'typescript', 20);
+		assert.strictEqual(result.status, 'success');
+		if (result.status !== 'success') {return;}
+		const loop = result.model.nodes.find(node => node.kind === 'loop');
+		const visit = result.model.nodes.find(node => node.kind === 'call' && node.calleeName === 'visit');
+		assert.ok(loop && visit);
+		assert.ok(result.model.edges.some(edge => edge.sourceNodeId === loop?.id && edge.targetNodeId === visit?.id && edge.kind === 'loop-body'));
+		assert.strictEqual(result.model.edges.some(edge => edge.sourceNodeId === visit?.id && edge.targetNodeId === loop?.id && edge.kind === 'loop-body'), false);
+	});
+
+	test('models break and expression statements inside loop branches', async () => {
+		const result = await analyze(`async function target(retry) { while (retry < 3) { const saved = await save(); if (saved) { break; } else { retry++; } } }`, 'typescript', 25);
+		assert.strictEqual(result.status, 'success');
+		if (result.status !== 'success') {return;}
+		const branch = result.model.nodes.find(node => node.kind === 'branch' && node.condition === 'saved');
+		const breakNode = result.model.nodes.find(node => node.kind === 'break');
+		const retry = result.model.nodes.find(node => node.kind === 'expression' && node.expression === 'retry++');
+		assert.ok(branch && breakNode && retry);
+		assert.ok(result.model.edges.some(edge => edge.sourceNodeId === branch?.id && edge.targetNodeId === breakNode?.id && edge.kind === 'true'));
+		assert.ok(result.model.edges.some(edge => edge.sourceNodeId === branch?.id && edge.targetNodeId === retry?.id && edge.kind === 'false'));
+	});
+
 	test('orders control entry edges before body-internal edges', async () => {
 		const result = await analyze(`function target(flag) { if (flag) { a(); b(); } after(); }`, 'javascript', 20);
 		assert.strictEqual(result.status, 'success');

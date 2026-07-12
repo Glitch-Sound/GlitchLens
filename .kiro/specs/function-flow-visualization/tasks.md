@@ -147,6 +147,21 @@
   - 失敗があれば要件に紐づくタスクへ戻して修正できる状態になる。
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4, 8.5_
 
+- [x] 10. Spec完了後のUI改善: Marketplace公開向けにWebview表示を整える
+- [x] 10.1 Mermaid sequence diagramの視認性を改善する
+  - Mermaid公式RendererをWebview内のローカルbundleとして使用し、外部CDNや外部ネットワークへ依存しない。
+  - Mermaid初期化では `currentColor` や未解決CSS変数を渡さず、解決済みの実色または安全なfallback色を使用する。
+  - `loop`、`alt`、`opt`、`critical`、`option` を種類別のアクセントカラーで表示し、枠線、ラベル、必要な文字色へ適用する。
+  - Mermaid描画失敗時は Mermaid text を fallback 表示し、Copy Mermaid は従来どおり動作する。
+  - Mermaid text、Common Flow Model、Renderer contract は変更しない。
+  - _Requirements: 4.2, 4.3, 5.1, 5.2, 7.2_
+- [x] 10.2 Source locations一覧を非表示にする
+  - SourceMap は内部データとして維持する。
+  - Webview下部の Source locations セクションは表示せず、空欄や余白も残さない。
+  - Renderer の RenderResult と SourceMap contract は変更しない。
+  - _Requirements: 3.2, 4.2, 7.2_
+
 ## Implementation Notes
 
 - 9.1: README/CHANGELOG は VS Code テンプレート文面が残っていたため、MVP の実行方法、対応範囲、Workspace Trust、local-only 境界を反映した。
+- 10.1, 10.2: Task 9 完了後の UI 改善として、Visualization / Webview 層だけで Mermaid 描画の視認性向上と Marketplace 公開版向けの Source locations 非表示を反映した。
