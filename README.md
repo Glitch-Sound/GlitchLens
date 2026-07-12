@@ -1,71 +1,46 @@
-# glitchlens README
+# GlitchLens
 
-This is the README for your extension "glitchlens". After writing up a brief description, we recommend including the following sections.
+GlitchLens is a VS Code extension that visualizes the static flow of the function you are reading as a Mermaid `sequenceDiagram`.
+
+It runs local static analysis for TypeScript and JavaScript files. It does not execute the target code, trace runtime behavior, call LLMs, or send source code or analysis results to external services.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- Start visualization from the command palette with `GlitchLens: Visualize Function Flow`.
+- Start visualization from CodeLens on TypeScript, JavaScript, TSX, and JSX functions.
+- Extract calls, branches, loops, `await`, `return`, `throw`, and `try` / `catch` / `finally` flow from the selected function.
+- Show unknown or unresolved calls and partial analysis results instead of hiding incomplete static analysis.
+- Display the Mermaid diagram in a VS Code Webview and copy the current Mermaid text.
 
-For example if there is an image subfolder under your extension project workspace:
+## Supported Languages
 
-\!\[feature X\]\(images/feature-x.png\)
+- TypeScript
+- JavaScript
+- TypeScript React
+- JavaScript React
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+Python, Sequence Diff, Test Hints, Layer Classification, Architecture Rules, PNG / SVG export, and Markdown insertion are outside the current MVP scope.
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
 This extension contributes the following settings:
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+- `glitchlens.codeLens.enabled`: Show CodeLens actions for visualizing function flow.
+- `glitchlens.supportedLanguages`: Language identifiers supported by GlitchLens function flow analysis.
 
-## Known Issues
+## Workspace Trust
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+GlitchLens is limited in Restricted Mode. Function flow commands, CodeLens, visualization, and Mermaid clipboard copy are disabled until the workspace is trusted.
 
-## Release Notes
+## Development
 
-Users appreciate release notes as you update your extension.
+Common validation commands:
 
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+```bash
+npm run check-types
+npm run lint
+npm run compile
+npm run test:unit
+npm run test:integration
+git diff --check
+```

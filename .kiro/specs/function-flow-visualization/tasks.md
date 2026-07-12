@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: 拡張の起動基盤とローカル実行境界を整える
+- [x] 1. Foundation: 拡張の起動基盤とローカル実行境界を整える
 - [x] 1.1 VS Code 側の起動口と設定を GlitchLens の可視化機能へ置き換える
   - hello world の起動口を、関数フロー可視化 command、CodeLens 起動、Workspace Trust 前提の manifest 設定へ置き換える。
   - TypeScript / JavaScript だけが初期対象になるよう、対応言語と非対応言語の判定が明確になる。
@@ -12,7 +12,7 @@
   - `strict` TypeScript、lint、test scripts が新しい構成でも通る状態になる。
   - _Requirements: 7.1, 7.2, 8.3_
 
-- [ ] 2. Common Flow Model: 静的処理フローの安定契約を実装する
+- [x] 2. Common Flow Model: 静的処理フローの安定契約を実装する
 - [x] 2.1 FlowNode、FlowEdge、metadata、source location、diagnostic のモデルを定義する
   - Call、Branch、Loop、Await、Return、Throw、Try/Catch、unknown / unresolved を表せるモデルにする。
   - FlowEdge は接続元、接続先、edge kind、execution order、任意の label、condition、source location を保持する。
@@ -84,7 +84,7 @@
   - diagnostics と renderer warnings が user-visible notices に変換されることを確認できる。
   - _Requirements: 1.3, 1.4, 4.4, 6.2, 6.3, 6.4, 8.1, 8.4, 8.5_
 
-- [ ] 6. VS Code Integration: command、CodeLens、表示、Clipboard を接続する
+- [x] 6. VS Code Integration: command、CodeLens、表示、Clipboard を接続する
 - [x] 6.1 CommandController でカーソル起点と CodeLens 起点の実行を扱う
   - VS Code document、position、cancellation を plain request に変換して Application を呼び出す。
   - 解析中 state、対象関数なし、非対応言語、解析失敗が VS Code 上でユーザーに分かる。
@@ -115,7 +115,7 @@
   - LLM 連携や実行時トレースのコードパスがこの仕様の機能として登録されていない。
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 7. Integration validation: VS Code 上の主要体験を通す
+- [x] 7. Integration validation: VS Code 上の主要体験を通す
 - [x] 7.1 Extension entry で登録と lifecycle をまとめる
   - command、CodeLens、VisualizationView、Clipboard、Workspace Trust 関連の disposable が extension lifecycle に登録される。
   - extension entry は登録だけを担当し、解析や Mermaid 生成の business logic を持たない。
@@ -128,7 +128,7 @@
   - 表示済み Mermaid text をコピーでき、コピー対象なしの理由も通知される。
   - _Requirements: 1.1, 1.2, 3.2, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 8.2_
 
-- [ ] 8. Responsiveness and safety validation: 応答性優先の振る舞いを確認する
+- [x] 8. Responsiveness and safety validation: 応答性優先の振る舞いを確認する
 - [x] 8.1 大きい関数や複雑な関数で部分結果とキャンセルを検証する
   - 完全解析より応答性を優先し、可能な範囲の部分結果が表示される。
   - 新しい編集や再実行で古い解析が破棄され、UI が長時間ブロックされない。
@@ -140,9 +140,13 @@
   - Workspace Trust の制約下でも安全な範囲で動作または明示的に制限される。
   - _Requirements: 2.1, 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 9. Final verification: 品質ゲートを通して実装完了にする
-- [ ] 9.1 TypeScript、lint、unit test、integration test を通す
+- [x] 9. Final verification: 品質ゲートを通して実装完了にする
+- [x] 9.1 TypeScript、lint、unit test、integration test を通す
   - `check-types`、lint、compile、unit tests、VS Code integration tests が成功する。
   - core logic の単体テストと VS Code 統合テストが分離されたまま実行できる。
   - 失敗があれば要件に紐づくタスクへ戻して修正できる状態になる。
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4, 8.5_
+
+## Implementation Notes
+
+- 9.1: README/CHANGELOG は VS Code テンプレート文面が残っていたため、MVP の実行方法、対応範囲、Workspace Trust、local-only 境界を反映した。
