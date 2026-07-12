@@ -160,8 +160,32 @@
   - Webview下部の Source locations セクションは表示せず、空欄や余白も残さない。
   - Renderer の RenderResult と SourceMap contract は変更しない。
   - _Requirements: 3.2, 4.2, 7.2_
+- [x] 10.3 UI-2: ライフライン・Activation の視認性改善
+  - ライフラインと participant 境界線を明るいグレー系へ調整し、背景へ埋もれない表示にする。
+  - Mermaid activation を Webview の描画入力で利用し、実行中の participant を表示する。
+  - await 呼び出しと return を通常 call から視覚的に区別できる配色にする。
+  - root participant を他 participant より少し強調する。
+  - UI 配色とテーマ適用は Visualization / Webview 層に閉じ込め、Mermaid text、Common Flow Model、Renderer contract、Copy Mermaid、SourceMap contract は変更しない。
+  - _Requirements: 3.1, 4.2, 4.3, 5.1, 5.2, 7.2_
+- [x] 10.4 UI-3: ライフライン・Activation・レイアウト改善
+  - root participant は関数開始から終了まで常時 activation 表示し、解析対象と処理全体の起点を明示する。
+  - 他 participant は Call / Await の実行期間だけ activation 表示する。
+  - ライフラインを白系へ調整し、ダークテーマでも activation と区別できる視認性を確保する。
+  - `loop`、`alt`、`opt`、`critical`、`option` のアクセントカラーを枠線、ラベル、タブへ適用する方針へ戻す。
+  - 長い participant 名、条件式、Call / Await ラベルが切れにくいよう Webview 側の Mermaid sequence 設定、SVG overflow、text layout を調整する。
+  - Mermaid text、Common Flow Model、Renderer contract、Copy Mermaid、SourceMap contract は変更しない。
+  - _Requirements: 3.1, 4.2, 4.3, 5.1, 5.2, 7.2_
+- [x] 10.5 UI-3不具合修正: Mermaid拡大表示とparticipant名はみ出しを解消する
+  - SVG は Webview 幅へ自然に収め、`max-width: none`、過剰な `min-width`、はみ出し回避目的の `overflow: visible` を使わない。
+  - Mermaid sequence の `useMaxWidth` を有効にし、actor/message/box margin は過剰に広げない。
+  - Mermaid が生成した `textLength`、`lengthAdjust`、SVG text の font-size を破壊的に上書きしない。
+  - root participant の常時 activation、他 participant の Call / Await activation、白系ライフライン、Control Block アクセント、Source locations 非表示、Copy Mermaid を維持する。
+  - _Requirements: 3.1, 4.2, 4.3, 5.1, 5.2, 7.2_
 
 ## Implementation Notes
 
 - 9.1: README/CHANGELOG は VS Code テンプレート文面が残っていたため、MVP の実行方法、対応範囲、Workspace Trust、local-only 境界を反映した。
 - 10.1, 10.2: Task 9 完了後の UI 改善として、Visualization / Webview 層だけで Mermaid 描画の視認性向上と Marketplace 公開版向けの Source locations 非表示を反映した。
+- 10.3: UI-2 として、Visualization / Webview 層だけでライフライン、activation、await / return、root participant の視認性を改善した。
+- 10.4: UI-3 として、Visualization / Webview 層だけで root participant の常時 activation、白系ライフライン、Control Block アクセントカラー、長いラベルや条件式のレイアウトを改善した。
+- 10.5: UI-3 の不具合修正として、Mermaid のレイアウト計算を尊重し、SVG の過剰拡大と participant 名のはみ出しを解消した。

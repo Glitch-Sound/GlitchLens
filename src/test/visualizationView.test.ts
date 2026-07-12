@@ -81,6 +81,12 @@ suite('VisualizationView', () => {
 		assert.ok(webviewSource.includes("import mermaid from 'mermaid'"));
 		assert.ok(webviewSource.includes("securityLevel: 'strict'"));
 		assert.ok(webviewSource.includes("theme: 'base'"));
+		assert.ok(webviewSource.includes('actorMargin: 60'));
+		assert.ok(webviewSource.includes('messageMargin: 45'));
+		assert.ok(webviewSource.includes('boxMargin: 8'));
+		assert.ok(webviewSource.includes('boxTextMargin: 5'));
+		assert.ok(webviewSource.includes('useMaxWidth: true'));
+		assert.ok(!webviewSource.includes('useMaxWidth: false'));
 		assert.ok(webviewSource.includes('getComputedStyle(document.documentElement)'));
 		assert.ok(webviewSource.includes('let mermaidInitialized = false'));
 		assert.ok(webviewSource.includes('if (!mermaidInitialized)'));
@@ -91,7 +97,24 @@ suite('VisualizationView', () => {
 		assert.ok(!webviewSource.match(/\b[a-zA-Z]+:\s*['"]currentColor['"]/));
 		assert.ok(!webviewSource.match(/\b[a-zA-Z]+:\s*['"]var\(--vscode-/));
 		assert.ok(webviewSource.includes('mermaid.render'));
+		assert.ok(webviewSource.includes('buildMermaidRenderText(mermaidText)'));
+		assert.ok(webviewSource.includes('readRootParticipantId(lines)'));
+		assert.ok(webviewSource.includes('activate ${rootParticipantId}'));
+		assert.ok(webviewSource.includes('deactivate ${rootParticipantId}'));
+		assert.ok(webviewSource.includes('activate ${message.to}'));
+		assert.ok(webviewSource.includes('deactivate ${message.to}'));
+		assert.ok(webviewSource.includes('deactivate ${message.from}'));
+		assert.ok(webviewSource.includes('if (message.to === rootParticipantId)'));
+		assert.ok(webviewSource.includes('parseSequenceMessage'));
+		assert.ok(!webviewSource.includes('relaxSvgTextLayout'));
+		assert.ok(!webviewSource.includes("removeAttribute('textLength')"));
+		assert.ok(!webviewSource.includes("removeAttribute('lengthAdjust')"));
+		assert.ok(webviewSource.includes('decorateSequenceParticipants(diagram)'));
+		assert.ok(webviewSource.includes('decorateSequenceMessages(diagram)'));
 		assert.ok(webviewSource.includes('decorateSequenceControls(diagram)'));
+		assert.ok(webviewSource.includes('glitchlens-root-participant'));
+		assert.ok(webviewSource.includes('glitchlens-await-message'));
+		assert.ok(webviewSource.includes('glitchlens-return-message'));
 		assert.ok(webviewSource.includes('glitchlens-control-loop'));
 		assert.ok(webviewSource.includes('glitchlens-control-alt'));
 		assert.ok(webviewSource.includes('glitchlens-control-opt'));
@@ -116,10 +139,11 @@ suite('VisualizationView', () => {
 			'loop orders',
 			'critical try',
 			'opt order.amount <= 0',
-			'root->>root: continue',
+			'root->>root: await continue',
 			'end',
 			'alt order.status === "new"',
-			'root->>charge: charge',
+			'root->>charge: await charge',
+			'charge-->>root: return receipt',
 			'else',
 			'root->>notify: notify',
 			'end',
@@ -146,11 +170,23 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes('critical try'));
 		assert.ok(html.includes('option catch error'));
 		assert.ok(html.includes('loop retry \\u003c 3'));
-		assert.ok(html.includes('.glitchlens-control-loop :is(rect,path,line,polygon){stroke:#4ea1ff!important;fill:#102a44!important;}'));
-		assert.ok(html.includes('.glitchlens-control-alt :is(rect,path,line,polygon){stroke:#2dd4e8!important;fill:#0d3440!important;}'));
-		assert.ok(html.includes('.glitchlens-control-opt :is(rect,path,line,polygon){stroke:#facc15!important;fill:#3b3208!important;}'));
-		assert.ok(html.includes('.glitchlens-control-critical :is(rect,path,line,polygon){stroke:#a78bfa!important;fill:#2e225e!important;}'));
-		assert.ok(html.includes('.glitchlens-control-option :is(rect,path,line,polygon){stroke:#f472b6!important;fill:#4a1232!important;}'));
+		assert.ok(html.includes('charge-->>root: return receipt'));
+		assert.ok(html.includes('#diagram svg{max-width:100%;width:100%;height:auto;display:block;border:1px solid var(--vscode-panel-border);background:var(--vscode-editor-background);}'));
+		assert.ok(!html.includes('max-width:none'));
+		assert.ok(!html.includes('min-width:100%'));
+		assert.ok(!html.includes('overflow:visible'));
+		assert.ok(!html.includes('#diagram svg text{font-size:13px!important'));
+		assert.ok(html.includes('#diagram svg .actor-line{stroke:#f4f7fb!important;stroke-width:1.25px!important;opacity:0.82!important;}'));
+		assert.ok(html.includes('#diagram svg .actor{stroke:#b8c0cc!important;stroke-width:1.4px!important;fill:#262b33!important;}'));
+		assert.ok(html.includes('#diagram svg [class*="activation"]{fill:#33506f!important;stroke:#8ecbff!important;stroke-width:1.4px!important;opacity:0.9!important;}'));
+		assert.ok(html.includes('.glitchlens-root-participant :is(rect,path,polygon){stroke:#f8fafc!important;stroke-width:2.2px!important;fill:#303846!important;}'));
+		assert.ok(html.includes('.glitchlens-await-message :is(path,line,polygon,marker path){stroke:#22d3ee!important;fill:#22d3ee!important;}'));
+		assert.ok(html.includes('.glitchlens-return-message :is(path,line,polygon,marker path){stroke:#8b949e!important;fill:#8b949e!important;opacity:0.75!important;}'));
+		assert.ok(html.includes('.glitchlens-control-loop :is(rect,path,line,polygon){stroke:#4ea1ff!important;fill:#202732!important;stroke-width:1.6px!important;}'));
+		assert.ok(html.includes('.glitchlens-control-alt :is(rect,path,line,polygon){stroke:#2dd4e8!important;fill:#202732!important;stroke-width:1.6px!important;}'));
+		assert.ok(html.includes('.glitchlens-control-opt :is(rect,path,line,polygon){stroke:#facc15!important;fill:#202732!important;stroke-width:1.6px!important;}'));
+		assert.ok(html.includes('.glitchlens-control-critical :is(rect,path,line,polygon){stroke:#a78bfa!important;fill:#202732!important;stroke-width:1.6px!important;}'));
+		assert.ok(html.includes('.glitchlens-control-option :is(rect,path,line,polygon){stroke:#f472b6!important;fill:#202732!important;stroke-width:1.6px!important;}'));
 		assert.ok(/"cspNonce":"[A-Za-z0-9]+"/.test(html));
 		assert.ok(!html.includes('<svg role="img" aria-label="Mermaid sequence diagram"'));
 	});
