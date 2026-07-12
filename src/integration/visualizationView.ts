@@ -49,6 +49,10 @@ export interface VisualizationView {
 	show(model: VisualizationViewModel): Promise<void>;
 }
 
+export interface DisposableLike {
+	dispose(): void;
+}
+
 export interface ClipboardAdapter {
 	writeText(text: string): Promise<void>;
 }
@@ -57,6 +61,10 @@ export interface VisualizationViewNotification {
 	showInfo(message: string): Promise<void>;
 	showWarning(message: string): Promise<void>;
 	showError(message: string): Promise<void>;
+}
+
+export interface VisualizationViewObserver {
+	didShowVisualization(model: VisualizationViewModel): void;
 }
 
 export interface VisualizationViewModelOptions {
@@ -68,8 +76,9 @@ export interface WebviewPanelPort {
 		html: string;
 	};
 	reveal(): void;
-	onDidDispose(listener: () => void): void;
-	onDidReceiveMessage(listener: (message: unknown) => void): void;
+	dispose(): void;
+	onDidDispose(listener: () => void): DisposableLike;
+	onDidReceiveMessage(listener: (message: unknown) => void): DisposableLike;
 }
 
 export interface WebviewPanelFactory {
@@ -85,10 +94,11 @@ export interface AllowedWebviewMessage {
 	readonly viewId?: string;
 }
 
-export class WebviewVisualizationAdapter implements VisualizationView {
+export class WebviewVisualizationAdapter implements VisualizationView, DisposableLike {
 	private panel: WebviewPanelPort | undefined;
 	private currentViewId: string | undefined;
 	private currentMermaidText: string | undefined;
+	private readonly panelDisposables: DisposableLike[] = [];
 	private readonly messageHandlers: Array<(message: AllowedWebviewMessage) => void> = [];
 
 	public constructor(
@@ -96,6 +106,7 @@ export class WebviewVisualizationAdapter implements VisualizationView {
 		private readonly clipboard: ClipboardAdapter,
 		private readonly notifications: VisualizationViewNotification,
 		private readonly trustGuard: VisualizationWorkspaceTrustGuardProvider = () => createWorkspaceTrustGuard({ isTrusted: true }),
+		private readonly observer?: VisualizationViewObserver,
 	) {}
 
 	public async show(model: VisualizationViewModel): Promise<void> {
@@ -111,11 +122,25 @@ export class WebviewVisualizationAdapter implements VisualizationView {
 		this.currentViewId = viewId;
 		this.currentMermaidText = canCopyMermaid(model) ? model.mermaidText : undefined;
 		panel.webview.html = renderHtml(model, createNonce(), viewId);
+		this.observer?.didShowVisualization(model);
 		panel.reveal();
 	}
 
 	public onDidReceiveAllowedMessage(handler: (message: AllowedWebviewMessage) => void): void {
 		this.messageHandlers.push(handler);
+	}
+
+	public dispose(): void {
+		const panel = this.panel;
+		this.clearPanelState();
+		panel?.dispose();
+	}
+
+	public copyCurrentMermaidForTest(): Promise<void> {
+		return this.copyCurrentMermaid({
+			type: 'copyMermaid',
+			viewId: this.currentViewId,
+		});
 	}
 
 	private createPanel(): WebviewPanelPort {
@@ -124,14 +149,12 @@ export class WebviewVisualizationAdapter implements VisualizationView {
 			localResourceRoots: [],
 		});
 		this.panel = panel;
-		panel.onDidDispose(() => {
+		this.panelDisposables.push(panel.onDidDispose(() => {
 			if (this.panel === panel) {
-				this.panel = undefined;
-				this.currentViewId = undefined;
-				this.currentMermaidText = undefined;
+				this.clearPanelState();
 			}
-		});
-		panel.onDidReceiveMessage(message => {
+		}));
+		this.panelDisposables.push(panel.onDidReceiveMessage(message => {
 			const allowed = parseAllowedMessage(message);
 			if (!allowed) {
 				return;
@@ -142,8 +165,17 @@ export class WebviewVisualizationAdapter implements VisualizationView {
 			if (allowed.type === 'copyMermaid') {
 				void this.copyCurrentMermaid(allowed);
 			}
-		});
+		}));
 		return panel;
+	}
+
+	private clearPanelState(): void {
+		for (const disposable of this.panelDisposables.splice(0)) {
+			disposable.dispose();
+		}
+		this.panel = undefined;
+		this.currentViewId = undefined;
+		this.currentMermaidText = undefined;
 	}
 
 	private async copyCurrentMermaid(message: AllowedWebviewMessage): Promise<void> {

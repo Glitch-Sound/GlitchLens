@@ -14,7 +14,7 @@ export interface SourceLocation {
 	readonly symbolName?: string;
 }
 
-export type SupportedLanguageId = 'typescript' | 'javascript';
+export type SupportedLanguageId = 'typescript' | 'javascript' | 'typescriptreact' | 'javascriptreact';
 
 export interface FlowSource {
 	readonly uri: string;

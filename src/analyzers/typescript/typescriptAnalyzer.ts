@@ -7,18 +7,18 @@ import type { FlowDiagnostic, FlowEdge, FlowNode, FlowModel, FlowFunction, Sourc
 export class TypeScriptAnalyzer implements LanguageAnalyzer {
 	public readonly id = 'typescript';
 	public readonly version = '0.3.0';
-	public readonly languageIds = ['typescript', 'javascript'] as const;
+	public readonly languageIds = ['typescript', 'javascript', 'typescriptreact', 'javascriptreact'] as const;
 
 	public analyze(input: AnalyzerInput): Promise<AnalyzerResult> {
 		try {
 			if (input.cancellation.isCancellationRequested) {
 				return Promise.resolve(cancelledResult(this.id, input.source.languageId));
 			}
-			if (input.source.languageId !== 'typescript' && input.source.languageId !== 'javascript') {
+			if (!this.languageIds.includes(input.source.languageId as typeof this.languageIds[number])) {
 				return Promise.resolve({ status: 'failed', completeness: 'failed', diagnostics: [], error: { kind: 'unsupported-language', message: `No TypeScript analyzer support for language "${input.source.languageId}".`, analyzerId: this.id, languageId: input.source.languageId } });
 			}
-			const languageId = input.source.languageId as 'typescript' | 'javascript';
-			const sourceFile = ts.createSourceFile(input.source.uri, input.source.text, ts.ScriptTarget.Latest, true, languageId === 'typescript' ? ts.ScriptKind.TS : ts.ScriptKind.JS);
+			const languageId = input.source.languageId as typeof this.languageIds[number];
+			const sourceFile = ts.createSourceFile(input.source.uri, input.source.text, ts.ScriptTarget.Latest, true, scriptKindForLanguage(languageId));
 			const target = findFunctionContainingOffset(input.source, input.cursorOffset);
 			if (target.status !== 'found') {
 				return Promise.resolve({ status: 'failed', completeness: 'failed', diagnostics: [], error: { kind: 'invalid-input', message: `No target function found (${target.reason}).`, analyzerId: this.id, languageId: input.source.languageId } });
@@ -42,6 +42,16 @@ export class TypeScriptAnalyzer implements LanguageAnalyzer {
 			return Promise.resolve({ status: 'failed', completeness: 'failed', diagnostics: [], error: { kind: 'analysis-failed', message: 'TypeScript analysis failed before a usable partial result could be produced.', analyzerId: this.id, languageId: input.source.languageId, cause: error } });
 		}
 	}
+}
+
+function scriptKindForLanguage(languageId: typeof TypeScriptAnalyzer.prototype.languageIds[number]): ts.ScriptKind {
+	if (languageId === 'typescriptreact') {
+		return ts.ScriptKind.TSX;
+	}
+	if (languageId === 'javascriptreact') {
+		return ts.ScriptKind.JSX;
+	}
+	return languageId === 'typescript' ? ts.ScriptKind.TS : ts.ScriptKind.JS;
 }
 
 function cancelledResult(analyzerId: string, languageId: string): AnalyzerResult {
@@ -90,7 +100,7 @@ class FlowBuilder {
 	public constructor(private readonly input: AnalyzerInput, private readonly sourceFile: ts.SourceFile, private readonly candidate: FunctionCandidate) {}
 
 	public model(): FlowModel {
-		const languageId = this.input.source.languageId as 'typescript' | 'javascript';
+		const languageId = this.input.source.languageId as TypeScriptAnalyzer['languageIds'][number];
 		const rootFunction: FlowFunction = { id: `function:${this.candidate.range.startOffset}`, name: this.candidate.name, sourceLocation: this.location(this.candidate.range.startOffset, this.candidate.range.endOffset, this.candidate.name) };
 		const edges = this.orderedEdges();
 		return {

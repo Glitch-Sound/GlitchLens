@@ -2,6 +2,8 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { visualizeFunctionFlowCommandId } from '../integration/commandIds';
+import { supportedLanguageIds } from '../integration/documentSelector';
 import { findFunctionCandidates } from '../integration/functionRanges';
 
 interface PackageJson {
@@ -13,7 +15,10 @@ interface PackageJson {
 			title: string;
 		}>;
 		configuration?: {
-			properties?: Record<string, unknown>;
+			properties?: Record<string, {
+				default?: unknown;
+				items?: unknown;
+			}>;
 		};
 	};
 	capabilities?: {
@@ -32,7 +37,7 @@ suite('GlitchLens foundation', () => {
 		const commands = packageJson.contributes?.commands ?? [];
 		const commandIds = commands.map(command => command.command);
 
-		assert.ok(commandIds.includes('glitchlens.visualizeFunctionFlow'));
+		assert.ok(commandIds.includes(visualizeFunctionFlowCommandId));
 		assert.ok(!commandIds.includes('glitchlens.helloWorld'));
 		assert.ok(!JSON.stringify(packageJson).toLowerCase().includes('llm'));
 	});
@@ -40,15 +45,24 @@ suite('GlitchLens foundation', () => {
 	test('activates only for the visualization command and initial TypeScript JavaScript targets', () => {
 		const activationEvents = packageJson.activationEvents ?? [];
 
-		assert.ok(activationEvents.includes('onCommand:glitchlens.visualizeFunctionFlow'));
-		assert.ok(activationEvents.includes('onLanguage:typescript'));
-		assert.ok(activationEvents.includes('onLanguage:javascript'));
-		assert.ok(activationEvents.includes('onLanguage:typescriptreact'));
-		assert.ok(activationEvents.includes('onLanguage:javascriptreact'));
+		assert.ok(activationEvents.includes(`onCommand:${visualizeFunctionFlowCommandId}`));
+		for (const languageId of supportedLanguageIds) {
+			assert.ok(activationEvents.includes(`onLanguage:${languageId}`));
+		}
 		assert.ok(!activationEvents.includes('onLanguage:python'));
 		assert.ok(!activationEvents.includes('onLanguage:java'));
 		assert.ok(!activationEvents.includes('onLanguage:go'));
 		assert.ok(!activationEvents.includes('onLanguage:csharp'));
+	});
+
+	test('keeps package command and language selectors aligned with implementation sources of truth', () => {
+		const commandIds = packageJson.contributes?.commands?.map(command => command.command) ?? [];
+		const activationEvents = packageJson.activationEvents ?? [];
+		const supportedLanguages = packageJson.contributes?.configuration?.properties?.['glitchlens.supportedLanguages']?.default;
+
+		assert.deepStrictEqual(commandIds, [visualizeFunctionFlowCommandId]);
+		assert.ok(activationEvents.includes(`onCommand:${visualizeFunctionFlowCommandId}`));
+		assert.deepStrictEqual(supportedLanguages, [...supportedLanguageIds]);
 	});
 
 	test('declares workspace trust and CodeLens configuration boundaries', () => {
@@ -128,6 +142,26 @@ suite('GlitchLens foundation', () => {
 		assert.ok(source.includes('visualizeFunctionFlowCommandId'));
 		assert.ok(source.includes('functionRange'));
 		assert.ok(source.includes('findFunctionCandidates'));
+	});
+
+	test('keeps extension entry thin and delegates lifecycle registration to integration composition', () => {
+		const extensionSource = fs.readFileSync(path.resolve(__dirname, '../../src/extension.ts'), 'utf8');
+		const entrySource = fs.readFileSync(path.resolve(__dirname, '../../src/integration/extensionEntry.ts'), 'utf8');
+		const adapterSource = fs.readFileSync(path.resolve(__dirname, '../../src/integration/vscodeAdapters.ts'), 'utf8');
+
+		assert.ok(extensionSource.includes('registerGlitchLensExtension(context)'));
+		assert.ok(!extensionSource.includes('MermaidRenderer'));
+		assert.ok(!extensionSource.includes('TypeScriptAnalyzer'));
+		assert.ok(!extensionSource.includes('VisualizeFunctionFlowUseCase'));
+		assert.ok(!extensionSource.includes('registerCommand'));
+		assert.ok(!extensionSource.includes('registerCodeLensProvider'));
+
+		assert.ok(entrySource.includes('context.subscriptions.push(view)'));
+		assert.ok(entrySource.includes('registerGlitchLensCommands(context, controller)'));
+		assert.ok(entrySource.includes('registerGlitchLensCodeLensProvider(context)'));
+		assert.ok(entrySource.includes('onDidGrantWorkspaceTrust'));
+		assert.ok(adapterSource.includes('VsCodeClipboardAdapter'));
+		assert.ok(adapterSource.includes('getWorkspaceTrustGuard'));
 	});
 
 	test('detects lightweight function candidates for CodeLens ranges', () => {

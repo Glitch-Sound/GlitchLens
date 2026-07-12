@@ -254,6 +254,25 @@ suite('VisualizationView', () => {
 		assert.deepStrictEqual(notifications.messages, []);
 	});
 
+	test('disposes active panel listeners and clears clipboard state through extension lifecycle', async () => {
+		const factory = new StubPanelFactory();
+		const clipboard = new StubClipboard();
+		const notifications = new StubNotification();
+		const adapter = new WebviewVisualizationAdapter(factory, clipboard, notifications);
+
+		await adapter.show(createVisualizationViewModel(successResult('success', { mermaidText: 'sequenceDiagram\nroot->>load: active\n' })));
+		const viewId = factory.panel.currentViewId();
+		adapter.dispose();
+
+		factory.panel.emitMessage({ type: 'copyMermaid', viewId });
+		await clipboard.flush();
+
+		assert.strictEqual(factory.panel.disposeCount, 1);
+		assert.strictEqual(factory.panel.listenerDisposeCount, 2);
+		assert.deepStrictEqual(clipboard.writes, []);
+		assert.deepStrictEqual(notifications.messages, []);
+	});
+
 	test('Clipboard remains inside integration boundary and upstream layers stay independent', () => {
 		const files = [
 			path.resolve(__dirname, '../../src/integration/visualizationView.ts'),
@@ -293,25 +312,40 @@ class StubPanelFactory implements WebviewPanelFactory {
 
 class StubPanel implements WebviewPanelPort {
 	public readonly webview = { html: '' };
+	public disposeCount = 0;
+	public listenerDisposeCount = 0;
 	private messageHandler: ((message: unknown) => void) | undefined;
 	private disposeHandler: (() => void) | undefined;
 
 	public reveal(): void {}
 
-	public onDidDispose(listener: () => void): void {
-		this.disposeHandler = listener;
+	public dispose(): void {
+		this.disposeCount += 1;
+		this.disposeHandler?.();
 	}
 
-	public onDidReceiveMessage(handler: (message: unknown) => void): void {
+	public onDidDispose(listener: () => void) {
+		this.disposeHandler = listener;
+		return {
+			dispose: () => {
+				this.listenerDisposeCount += 1;
+				this.disposeHandler = undefined;
+			},
+		};
+	}
+
+	public onDidReceiveMessage(handler: (message: unknown) => void) {
 		this.messageHandler = handler;
+		return {
+			dispose: () => {
+				this.listenerDisposeCount += 1;
+				this.messageHandler = undefined;
+			},
+		};
 	}
 
 	public emitMessage(message: unknown): void {
 		this.messageHandler?.(message);
-	}
-
-	public dispose(): void {
-		this.disposeHandler?.();
 	}
 
 	public currentViewId(): string {

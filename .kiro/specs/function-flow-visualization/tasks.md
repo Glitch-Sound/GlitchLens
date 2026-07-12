@@ -116,13 +116,13 @@
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
 - [ ] 7. Integration validation: VS Code 上の主要体験を通す
-- [ ] 7.1 Extension entry で登録と lifecycle をまとめる
+- [x] 7.1 Extension entry で登録と lifecycle をまとめる
   - command、CodeLens、VisualizationView、Clipboard、Workspace Trust 関連の disposable が extension lifecycle に登録される。
   - extension entry は登録だけを担当し、解析や Mermaid 生成の business logic を持たない。
   - package contribution と実装内 command id が一致していることを確認できる。
   - _Depends: 6.1, 6.2, 6.3, 6.4, 6.5_
   - _Requirements: 1.1, 1.2, 5.1, 7.1, 7.2_
-- [ ] 7.2 VS Code 統合テストで command、CodeLens、表示、Clipboard を検証する
+- [x] 7.2 VS Code 統合テストで command、CodeLens、表示、Clipboard を検証する
   - カーソル起点と CodeLens 起点の両方から可視化が開始される。
   - Mermaid 図が VS Code 上に表示され、unknown / unresolved と partial result がユーザーに見える。
   - 表示済み Mermaid text をコピーでき、コピー対象なしの理由も通知される。

@@ -12,16 +12,20 @@ import {
 } from '../analyzers';
 
 suite('Language Analyzer contract', () => {
-	test('selects the TypeScript analyzer for TypeScript and JavaScript', () => {
+	test('selects the TypeScript analyzer for TypeScript JavaScript TSX and JSX', () => {
 		const factory = new AnalyzerFactory([new TypeScriptAnalyzer()]);
 
 		const typescript = factory.createAnalyzer('typescript');
 		const javascript = factory.createAnalyzer('javascript');
+		const tsx = factory.createAnalyzer('typescriptreact');
+		const jsx = factory.createAnalyzer('javascriptreact');
 
 		assert.strictEqual(typescript.status, 'found');
 		assert.strictEqual(javascript.status, 'found');
+		assert.strictEqual(tsx.status, 'found');
+		assert.strictEqual(jsx.status, 'found');
 		if (typescript.status === 'found' && javascript.status === 'found') {
-			assert.deepStrictEqual(typescript.analyzer.languageIds, ['typescript', 'javascript']);
+			assert.deepStrictEqual(typescript.analyzer.languageIds, ['typescript', 'javascript', 'typescriptreact', 'javascriptreact']);
 			assert.strictEqual(typescript.analyzer.id, 'typescript');
 			assert.strictEqual(javascript.analyzer.id, 'typescript');
 		}
