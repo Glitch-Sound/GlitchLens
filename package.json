@@ -1,13 +1,37 @@
 {
   "name": "glitchlens",
   "displayName": "GlitchLens",
-  "description": "Instantly visualize static function flow as Mermaid sequence diagrams.",
+  "publisher": "glitch-sound",
+  "description": "Instantly visualize TypeScript and JavaScript function flow as Mermaid sequence diagrams.",
+  "license": "MIT",
   "version": "0.0.1",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Glitch-Sound/GlitchLens.git"
+  },
   "engines": {
     "vscode": "^1.125.0"
   },
+  "homepage": "https://github.com/Glitch-Sound/GlitchLens",
+  "bugs": {
+    "url": "https://github.com/Glitch-Sound/GlitchLens/issues"
+},
   "categories": [
+    "Programming Languages",
     "Other"
+  ],
+  "keywords": [
+    "mermaid",
+    "sequence-diagram",
+    "sequence",
+    "flow",
+    "callgraph",
+    "typescript",
+    "javascript",
+    "visualization",
+    "ast",
+    "codelens"
   ],
   "activationEvents": [
     "onCommand:glitchlens.visualizeFunctionFlow",
