@@ -1,3 +1,5 @@
+import { findFunctionCandidates as findTypeScriptFunctionCandidates } from '../analyzers/typescript/functionLocator';
+
 export interface TextRange {
 	readonly startLine: number;
 	readonly startCharacter: number;
@@ -10,31 +12,21 @@ export interface FunctionCandidate {
 	readonly range: TextRange;
 }
 
-const functionDeclarationPattern = /^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/;
-const arrowFunctionPattern = /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/;
+export interface FunctionCandidateInput {
+	readonly uri: string;
+	readonly languageId: string;
+	readonly version: number;
+	readonly text: string;
+}
 
-export function findFunctionCandidates(text: string): FunctionCandidate[] {
-	const lines = text.split(/\r?\n/);
-	const candidates: FunctionCandidate[] = [];
-
-	for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-		const line = lines[lineIndex];
-		const match = functionDeclarationPattern.exec(line) ?? arrowFunctionPattern.exec(line);
-
-		if (match) {
-			const name = match[1];
-			const startCharacter = line.indexOf(name);
-			candidates.push({
-				name,
-				range: {
-					startLine: lineIndex,
-					startCharacter,
-					endLine: lineIndex,
-					endCharacter: startCharacter + name.length,
-				},
-			});
-		}
-	}
-
-	return candidates;
+export function findFunctionCandidates(input: FunctionCandidateInput): FunctionCandidate[] {
+	return findTypeScriptFunctionCandidates(input).map(candidate => ({
+		name: candidate.name,
+		range: {
+			startLine: candidate.range.start.line,
+			startCharacter: candidate.range.start.character,
+			endLine: candidate.range.end.line,
+			endCharacter: candidate.range.end.character,
+		},
+	}));
 }

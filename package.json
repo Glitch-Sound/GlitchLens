@@ -12,7 +12,9 @@
   "activationEvents": [
     "onCommand:glitchlens.visualizeFunctionFlow",
     "onLanguage:typescript",
-    "onLanguage:javascript"
+    "onLanguage:javascript",
+    "onLanguage:typescriptreact",
+    "onLanguage:javascriptreact"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -34,7 +36,9 @@
           "type": "array",
           "default": [
             "typescript",
-            "javascript"
+            "javascript",
+            "typescriptreact",
+            "javascriptreact"
           ],
           "items": {
             "type": "string"
@@ -47,7 +51,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "GlitchLens runs local static analysis only. Workspace features may be limited until the workspace is trusted."
+      "description": "GlitchLens runs local static analysis only. In Restricted Mode, function flow commands, CodeLens, visualization, and Mermaid clipboard copy are disabled until the workspace is trusted."
     }
   },
   "scripts": {

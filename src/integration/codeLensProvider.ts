@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 
-import { visualizeFunctionFlowCommandId } from './commands';
+import { createFunctionCodeLensCommands } from './codeLensCommands';
+import { visualizeFunctionFlowCommandId } from './commandIds';
 import { isSupportedLanguage, supportedLanguageIds } from './documentSelector';
-import { findFunctionCandidates } from './functionRanges';
+import { getWorkspaceTrustGuard, type WorkspaceTrustGuard } from './workspaceTrust';
 
 export function registerGlitchLensCodeLensProvider(context: vscode.ExtensionContext): void {
 	const selectors = supportedLanguageIds.map(language => ({ language, scheme: 'file' }));
@@ -11,13 +12,21 @@ export function registerGlitchLensCodeLensProvider(context: vscode.ExtensionCont
 	context.subscriptions.push(vscode.languages.registerCodeLensProvider(selectors, provider));
 }
 
-class GlitchLensCodeLensProvider implements vscode.CodeLensProvider {
+export class GlitchLensCodeLensProvider implements vscode.CodeLensProvider {
+	public constructor(private readonly trustGuardFactory: () => Pick<WorkspaceTrustGuard, 'canProvideCodeLens'> = getWorkspaceTrustGuard) {}
+
 	public provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.CodeLens[] {
-		if (token.isCancellationRequested || !isSupportedLanguage(document.languageId) || !isCodeLensEnabled()) {
+		const trustGuard = this.trustGuardFactory();
+		if (token.isCancellationRequested || !trustGuard.canProvideCodeLens || !isSupportedLanguage(document.languageId) || !isCodeLensEnabled()) {
 			return [];
 		}
 
-		return findFunctionCandidates(document.getText()).map(candidate => {
+		return createFunctionCodeLensCommands({
+			uri: document.uri.toString(),
+			languageId: document.languageId,
+			version: document.version,
+			text: document.getText(),
+		}, trustGuard).map(candidate => {
 			const range = new vscode.Range(
 				candidate.range.startLine,
 				candidate.range.startCharacter,
@@ -26,15 +35,9 @@ class GlitchLensCodeLensProvider implements vscode.CodeLensProvider {
 			);
 
 			return new vscode.CodeLens(range, {
-				title: 'GlitchLens: Visualize Function Flow',
+				title: candidate.title,
 				command: visualizeFunctionFlowCommandId,
-				arguments: [{
-					uri: document.uri.toString(),
-					languageId: document.languageId,
-					version: document.version,
-					functionName: candidate.name,
-					functionRange: candidate.range,
-				}],
+				arguments: [candidate.argument],
 			});
 		});
 	}

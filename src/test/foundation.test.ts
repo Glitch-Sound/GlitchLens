@@ -43,6 +43,8 @@ suite('GlitchLens foundation', () => {
 		assert.ok(activationEvents.includes('onCommand:glitchlens.visualizeFunctionFlow'));
 		assert.ok(activationEvents.includes('onLanguage:typescript'));
 		assert.ok(activationEvents.includes('onLanguage:javascript'));
+		assert.ok(activationEvents.includes('onLanguage:typescriptreact'));
+		assert.ok(activationEvents.includes('onLanguage:javascriptreact'));
 		assert.ok(!activationEvents.includes('onLanguage:python'));
 		assert.ok(!activationEvents.includes('onLanguage:java'));
 		assert.ok(!activationEvents.includes('onLanguage:go'));
@@ -51,10 +53,57 @@ suite('GlitchLens foundation', () => {
 
 	test('declares workspace trust and CodeLens configuration boundaries', () => {
 		const properties = packageJson.contributes?.configuration?.properties ?? {};
+		const trustDescription = packageJson.capabilities?.untrustedWorkspaces?.description ?? '';
 
 		assert.strictEqual(packageJson.capabilities?.untrustedWorkspaces?.supported, 'limited');
+		assert.ok(trustDescription.includes('Restricted Mode'));
+		assert.ok(trustDescription.includes('disabled'));
 		assert.ok(Object.hasOwn(properties, 'glitchlens.codeLens.enabled'));
 		assert.ok(Object.hasOwn(properties, 'glitchlens.supportedLanguages'));
+	});
+
+	test('keeps manifest and runtime trust guard policy aligned', () => {
+		const packageText = fs.readFileSync(packageJsonPath, 'utf8');
+		const trustSource = [
+			fs.readFileSync(path.resolve(__dirname, '../../src/integration/workspaceTrust.ts'), 'utf8'),
+			fs.readFileSync(path.resolve(__dirname, '../../src/integration/workspaceTrustPolicy.ts'), 'utf8'),
+		].join('\n');
+
+		assert.ok(packageText.includes('"supported": "limited"'));
+		assert.ok(trustSource.includes('canExecuteCommand'));
+		assert.ok(trustSource.includes('canProvideCodeLens'));
+		assert.ok(trustSource.includes('canShowVisualization'));
+		assert.ok(trustSource.includes('canWriteClipboard'));
+		assert.ok(trustSource.includes('Restricted Mode'));
+	});
+
+	test('does not register external egress LLM runtime trace or process execution paths', () => {
+		const projectSource = [
+			fs.readFileSync(packageJsonPath, 'utf8'),
+			...[
+				path.resolve(__dirname, '../../src/extension.ts'),
+				path.resolve(__dirname, '../../src/application'),
+				path.resolve(__dirname, '../../src/analyzers'),
+				path.resolve(__dirname, '../../src/flow-model'),
+				path.resolve(__dirname, '../../src/integration'),
+				path.resolve(__dirname, '../../src/renderer'),
+			].flatMap(readTree),
+		].join('\n');
+		const commandIds = packageJson.contributes?.commands?.map(command => command.command) ?? [];
+		const lower = projectSource.toLowerCase();
+
+		assert.deepStrictEqual(commandIds, ['glitchlens.visualizeFunctionFlow']);
+		assert.ok(!/\bfetch\s*\(/.test(projectSource));
+		assert.ok(!/\bxmlhttprequest\b/i.test(projectSource));
+		assert.ok(!/\bwebsocket\b/i.test(projectSource));
+		assert.ok(!/\btelemetry\b/i.test(projectSource));
+		assert.ok(!/\bupload\b/i.test(projectSource));
+		assert.ok(!/\bhttps?\s*\./.test(projectSource));
+		assert.ok(!/from ['"](?:node:)?(?:child_process|vm|inspector|trace_events|worker_threads)['"]/.test(projectSource));
+		assert.ok(!/\b(?:spawn|exec|fork|trace)\s*\(/.test(projectSource));
+		assert.ok(!lower.includes('openai'));
+		assert.ok(!lower.includes('anthropic'));
+		assert.ok(!lower.includes('llm'));
 	});
 
 	test('separates unit and VS Code integration validation scripts', () => {
@@ -68,10 +117,12 @@ suite('GlitchLens foundation', () => {
 
 	test('provides a CodeLens registration boundary using the visualization command', () => {
 		const providerPath = path.resolve(__dirname, '../../src/integration/codeLensProvider.ts');
+		const commandPath = path.resolve(__dirname, '../../src/integration/codeLensCommands.ts');
 
 		assert.ok(fs.existsSync(providerPath));
+		assert.ok(fs.existsSync(commandPath));
 
-		const source = fs.readFileSync(providerPath, 'utf8');
+		const source = `${fs.readFileSync(providerPath, 'utf8')}\n${fs.readFileSync(commandPath, 'utf8')}`;
 		assert.ok(source.includes('registerGlitchLensCodeLensProvider'));
 		assert.ok(source.includes('registerCodeLensProvider'));
 		assert.ok(source.includes('visualizeFunctionFlowCommandId'));
@@ -90,7 +141,12 @@ suite('GlitchLens foundation', () => {
 			'};',
 		].join('\n');
 
-		const candidates = findFunctionCandidates(source);
+		const candidates = findFunctionCandidates({
+			uri: 'file:///workspace/source.ts',
+			languageId: 'typescript',
+			version: 1,
+			text: source,
+		});
 
 		assert.deepStrictEqual(candidates.map(candidate => candidate.name), ['loadUser', 'saveUser']);
 		assert.deepStrictEqual(candidates[0].range, {
@@ -136,4 +192,18 @@ function listTypeScriptFiles(directory: string): string[] {
 	}
 
 	return files;
+}
+
+function readTree(root: string): string[] {
+	if (!fs.existsSync(root)) {
+		return [];
+	}
+	const stat = fs.statSync(root);
+	if (stat.isFile() && root.endsWith('.ts')) {
+		return [fs.readFileSync(root, 'utf8')];
+	}
+	if (!stat.isDirectory()) {
+		return [];
+	}
+	return fs.readdirSync(root).flatMap(entry => readTree(path.join(root, entry)));
 }

@@ -1,4 +1,4 @@
-export const supportedLanguageIds = ['typescript', 'javascript'] as const;
+export const supportedLanguageIds = ['typescript', 'javascript', 'typescriptreact', 'javascriptreact'] as const;
 
 export type SupportedLanguageId = typeof supportedLanguageIds[number];
 

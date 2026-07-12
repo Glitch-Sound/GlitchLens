@@ -85,31 +85,31 @@
   - _Requirements: 1.3, 1.4, 4.4, 6.2, 6.3, 6.4, 8.1, 8.4, 8.5_
 
 - [ ] 6. VS Code Integration: command、CodeLens、表示、Clipboard を接続する
-- [ ] 6.1 CommandController でカーソル起点と CodeLens 起点の実行を扱う
+- [x] 6.1 CommandController でカーソル起点と CodeLens 起点の実行を扱う
   - VS Code document、position、cancellation を plain request に変換して Application を呼び出す。
   - 解析中 state、対象関数なし、非対応言語、解析失敗が VS Code 上でユーザーに分かる。
   - command 実行中も VS Code の通常編集操作を妨げない。
   - _Depends: 5.1_
   - _Requirements: 1.2, 1.3, 1.4, 4.2, 8.2, 8.3, 8.5_
-- [ ] 6.2 CodeLens provider で軽量な関数起動 UI を提供する
+- [x] 6.2 CodeLens provider で軽量な関数起動 UI を提供する
   - 対応言語の関数に CodeLens が表示され、実行時に対象関数 range が command へ渡る。
   - CodeLens 計算では詳細解析を行わず、cancellation により古い計算を破棄できる。
   - CodeLens から起動した関数が解析対象として特定されることを確認できる。
   - _Depends: 3.2_
   - _Requirements: 1.1, 8.3_
-- [ ] 6.3 VisualizationView と Webview adapter で可視化結果を表示する
+- [x] 6.3 VisualizationView と Webview adapter で可視化結果を表示する
   - Application から受け取った表示用結果だけを使い、Analyzer 固有データや Renderer warning を直接扱わない。
   - VS Code 上で Mermaid 図、未解決要素、解析できた範囲とできなかった箇所が表示される。
   - Webview adapter には CSP、nonce、local resource 制限が設定される。
   - _Depends: 5.1_
   - _Requirements: 3.1, 3.2, 3.4, 4.2, 4.3, 4.4, 6.2, 6.4, 7.2_
-- [ ] 6.4 Clipboard 操作で現在の Mermaid text をコピーできるようにする
+- [x] 6.4 Clipboard 操作で現在の Mermaid text をコピーできるようにする
   - 表示中の図に対応する Mermaid text をユーザー操作で clipboard へ保存できる。
   - コピー対象がない場合は理由が通知される。
   - Clipboard 利用は Integration 境界に留まり、解析結果の外部送信を行わない。
   - _Depends: 6.3_
   - _Requirements: 5.1, 5.2, 5.3, 7.2_
-- [ ] 6.5 Workspace Trust とローカル処理の runtime guard を組み込む
+- [x] 6.5 Workspace Trust とローカル処理の runtime guard を組み込む
   - Restricted Mode で許可する動作と制限する動作が manifest と runtime の両方で一致する。
   - ソースコード、FlowModel、Mermaid text、diagnostics を外部サービスへ送信する経路が存在しない。
   - LLM 連携や実行時トレースのコードパスがこの仕様の機能として登録されていない。
