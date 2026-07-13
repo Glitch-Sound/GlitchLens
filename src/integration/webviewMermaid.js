@@ -207,6 +207,14 @@ const CONTROL_CLASS_BY_KEYWORD = {
 	option: 'glitchlens-control-option',
 };
 
+const CONTROL_COLOR_BY_KEYWORD = {
+	loop: '#9fd0ff',
+	alt: '#8ff2ff',
+	opt: '#fde68a',
+	critical: '#ddd6fe',
+	option: '#fbcfe8',
+};
+
 function decorateSequenceControls(diagram) {
 	for (const text of diagram.querySelectorAll('svg text')) {
 		const keyword = readControlKeyword(text.textContent);
@@ -214,7 +222,18 @@ function decorateSequenceControls(diagram) {
 			continue;
 		}
 		const group = findControlGroup(text);
-		group?.classList.add(CONTROL_CLASS_BY_KEYWORD[keyword]);
+		const className = CONTROL_CLASS_BY_KEYWORD[keyword];
+		const color = CONTROL_COLOR_BY_KEYWORD[keyword];
+		group?.classList.add(className);
+		text.classList.add(className);
+		text.style.setProperty('fill', color, 'important');
+		for (const shape of group?.querySelectorAll('rect,path,line,polygon') ?? []) {
+			shape.classList.add(className);
+			shape.style.setProperty('stroke', color, 'important');
+			shape.style.setProperty('fill', '#202732', 'important');
+			shape.style.setProperty('stroke-width', '3px', 'important');
+			shape.style.setProperty('stroke-dasharray', 'none', 'important');
+		}
 	}
 }
 

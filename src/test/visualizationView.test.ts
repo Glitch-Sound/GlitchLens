@@ -107,6 +107,10 @@ suite('VisualizationView', () => {
 		assert.ok(webviewSource.includes("setAttribute('alignment-baseline', 'middle')"));
 		assert.ok(webviewSource.includes("style.setProperty('text-anchor', 'middle')"));
 		assert.ok(webviewSource.includes('readRootParticipantId(lines)'));
+		assert.ok(webviewSource.includes('shape.classList.add(className)'));
+		assert.ok(webviewSource.includes('text.classList.add(className)'));
+		assert.ok(webviewSource.includes("shape.style.setProperty('stroke', color, 'important')"));
+		assert.ok(webviewSource.includes("shape.style.setProperty('stroke-dasharray', 'none', 'important')"));
 		assert.ok(webviewSource.includes('activate ${rootParticipantId}'));
 		assert.ok(webviewSource.includes('deactivate ${rootParticipantId}'));
 		assert.ok(webviewSource.includes('activate ${message.to}'));
@@ -193,11 +197,6 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes('.glitchlens-root-participant :is(rect,path,polygon){stroke:#f8fafc!important;stroke-width:2.2px!important;fill:#303846!important;}'));
 		assert.ok(html.includes('.glitchlens-await-message :is(path,line,polygon,marker path){stroke:#22d3ee!important;fill:#22d3ee!important;}'));
 		assert.ok(html.includes('.glitchlens-return-message :is(path,line,polygon,marker path){stroke:#8b949e!important;fill:#8b949e!important;opacity:0.75!important;}'));
-		assert.ok(html.includes('.glitchlens-control-loop :is(rect,path,line,polygon){stroke:#4ea1ff!important;fill:#202732!important;stroke-width:1.6px!important;}'));
-		assert.ok(html.includes('.glitchlens-control-alt :is(rect,path,line,polygon){stroke:#2dd4e8!important;fill:#202732!important;stroke-width:1.6px!important;}'));
-		assert.ok(html.includes('.glitchlens-control-opt :is(rect,path,line,polygon){stroke:#facc15!important;fill:#202732!important;stroke-width:1.6px!important;}'));
-		assert.ok(html.includes('.glitchlens-control-critical :is(rect,path,line,polygon){stroke:#a78bfa!important;fill:#202732!important;stroke-width:1.6px!important;}'));
-		assert.ok(html.includes('.glitchlens-control-option :is(rect,path,line,polygon){stroke:#f472b6!important;fill:#202732!important;stroke-width:1.6px!important;}'));
 		assert.ok(/"cspNonce":"[A-Za-z0-9]+"/.test(html));
 		assert.ok(!html.includes('<svg role="img" aria-label="Mermaid sequence diagram"'));
 	});

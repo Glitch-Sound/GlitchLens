@@ -196,3 +196,4 @@
 - 10.5: UI-3 の不具合修正として、Mermaid のレイアウト計算を尊重し、SVG の過剰拡大と participant 名のはみ出しを解消した。
 - 10.6: participant 名を actor box 内で水平・垂直中央揃えし、Mermaid の text layout 属性を保持したまま長い名前のはみ出しを防止した。
 - 10.7: Mermaidの実SVGでactor textが直接`text.actor.actor-box`になる構造にも対応し、中央揃え指定を確実に適用した。
+- 10.8: Control Block の配色はMermaid既定CSSとの競合を避けるため描画後SVGへ直接適用し、枠線を実線・3pxで表示する。重複するVisualizationView側のControl Block CSSは削除した。

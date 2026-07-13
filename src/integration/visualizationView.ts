@@ -271,16 +271,6 @@ function renderHtml(model: VisualizationViewModel, nonce: string, viewId: string
 		'.glitchlens-await-message text{fill:#a5f3fc!important;font-weight:600!important;}',
 		'.glitchlens-return-message :is(path,line,polygon,marker path){stroke:#8b949e!important;fill:#8b949e!important;opacity:0.75!important;}',
 		'.glitchlens-return-message text{fill:#aeb6c2!important;font-style:italic!important;}',
-		'.glitchlens-control-loop :is(rect,path,line,polygon){stroke:#4ea1ff!important;fill:#202732!important;stroke-width:1.6px!important;}',
-		'.glitchlens-control-alt :is(rect,path,line,polygon){stroke:#2dd4e8!important;fill:#202732!important;stroke-width:1.6px!important;}',
-		'.glitchlens-control-opt :is(rect,path,line,polygon){stroke:#facc15!important;fill:#202732!important;stroke-width:1.6px!important;}',
-		'.glitchlens-control-critical :is(rect,path,line,polygon){stroke:#a78bfa!important;fill:#202732!important;stroke-width:1.6px!important;}',
-		'.glitchlens-control-option :is(rect,path,line,polygon){stroke:#f472b6!important;fill:#202732!important;stroke-width:1.6px!important;}',
-		'.glitchlens-control-loop text{fill:#9fd0ff!important;}',
-		'.glitchlens-control-alt text{fill:#8ff2ff!important;}',
-		'.glitchlens-control-opt text{fill:#fde68a!important;}',
-		'.glitchlens-control-critical text{fill:#ddd6fe!important;}',
-		'.glitchlens-control-option text{fill:#fbcfe8!important;}',
 	].join('');
 	return [
 		'<!DOCTYPE html>',
