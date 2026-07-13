@@ -182,6 +182,11 @@
   - root participant の常時 activation、他 participant の Call / Await activation、白系ライフライン、Control Block アクセント、Source locations 非表示、Copy Mermaid を維持する。
   - _Requirements: 3.1, 4.2, 4.3, 5.1, 5.2, 7.2_
 
+- [x] 10.6 UI-3不具合修正: participant名をactor box内で中央揃えし、長い名前のはみ出しを防止する
+  - 上部・下部のactor boxに対応するtextへ水平・垂直中央揃え属性を付与し、Mermaidのx/y/textLength/lengthAdjustを維持する。
+  - Mermaidの既定レイアウトを優先し、必要最小限のsequence余白だけを設定する。一律font-size強制やSVG text属性の削除は行わない。
+  - _Requirements: 3.1, 4.2, 4.3, 5.1, 5.2, 7.2_
+
 ## Implementation Notes
 
 - 9.1: README/CHANGELOG は VS Code テンプレート文面が残っていたため、MVP の実行方法、対応範囲、Workspace Trust、local-only 境界を反映した。
@@ -189,3 +194,5 @@
 - 10.3: UI-2 として、Visualization / Webview 層だけでライフライン、activation、await / return、root participant の視認性を改善した。
 - 10.4: UI-3 として、Visualization / Webview 層だけで root participant の常時 activation、白系ライフライン、Control Block アクセントカラー、長いラベルや条件式のレイアウトを改善した。
 - 10.5: UI-3 の不具合修正として、Mermaid のレイアウト計算を尊重し、SVG の過剰拡大と participant 名のはみ出しを解消した。
+- 10.6: participant 名を actor box 内で水平・垂直中央揃えし、Mermaid の text layout 属性を保持したまま長い名前のはみ出しを防止した。
+- 10.7: Mermaidの実SVGでactor textが直接`text.actor.actor-box`になる構造にも対応し、中央揃え指定を確実に適用した。

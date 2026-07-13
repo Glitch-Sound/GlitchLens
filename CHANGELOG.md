@@ -13,3 +13,5 @@ All notable changes to the "glitchlens" extension will be documented in this fil
 - Improved Mermaid UI readability with brighter lifelines, activation display, await and return styling, and root participant emphasis.
 - Improved Mermaid layout with root participant always activated, higher-contrast lifelines, restored control block accents, and more resilient labels.
 - Fixed Mermaid Webview scaling and participant label overflow by preserving Mermaid's SVG text layout and max-width behavior.
+- Centered participant names horizontally and vertically inside actor boxes.
+- Fixed participant text overflow beyond actor box boundaries for long function names.

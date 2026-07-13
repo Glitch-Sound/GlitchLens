@@ -81,8 +81,10 @@ suite('VisualizationView', () => {
 		assert.ok(webviewSource.includes("import mermaid from 'mermaid'"));
 		assert.ok(webviewSource.includes("securityLevel: 'strict'"));
 		assert.ok(webviewSource.includes("theme: 'base'"));
-		assert.ok(webviewSource.includes('actorMargin: 60'));
+		assert.ok(webviewSource.includes('actorMargin: 40'));
 		assert.ok(webviewSource.includes('messageMargin: 45'));
+		assert.ok(webviewSource.includes('diagramMarginX: 8'));
+		assert.ok(webviewSource.includes('diagramMarginY: 8'));
 		assert.ok(webviewSource.includes('boxMargin: 8'));
 		assert.ok(webviewSource.includes('boxTextMargin: 5'));
 		assert.ok(webviewSource.includes('useMaxWidth: true'));
@@ -98,6 +100,12 @@ suite('VisualizationView', () => {
 		assert.ok(!webviewSource.match(/\b[a-zA-Z]+:\s*['"]var\(--vscode-/));
 		assert.ok(webviewSource.includes('mermaid.render'));
 		assert.ok(webviewSource.includes('buildMermaidRenderText(mermaidText)'));
+		assert.ok(webviewSource.includes('centerParticipantLabels(diagram)'));
+		assert.ok(webviewSource.includes("querySelectorAll('svg text.actor.actor-box, svg g.actor text, svg g.actor-top text, svg g.actor-bottom text')"));
+		assert.ok(webviewSource.includes("setAttribute('text-anchor', 'middle')"));
+		assert.ok(webviewSource.includes("setAttribute('dominant-baseline', 'middle')"));
+		assert.ok(webviewSource.includes("setAttribute('alignment-baseline', 'middle')"));
+		assert.ok(webviewSource.includes("style.setProperty('text-anchor', 'middle')"));
 		assert.ok(webviewSource.includes('readRootParticipantId(lines)'));
 		assert.ok(webviewSource.includes('activate ${rootParticipantId}'));
 		assert.ok(webviewSource.includes('deactivate ${rootParticipantId}'));
@@ -109,6 +117,9 @@ suite('VisualizationView', () => {
 		assert.ok(!webviewSource.includes('relaxSvgTextLayout'));
 		assert.ok(!webviewSource.includes("removeAttribute('textLength')"));
 		assert.ok(!webviewSource.includes("removeAttribute('lengthAdjust')"));
+		assert.ok(!webviewSource.includes("removeAttribute('x')"));
+		assert.ok(!webviewSource.includes("removeAttribute('y')"));
+		assert.ok(!webviewSource.match(/svg text[^\n]*font-size/));
 		assert.ok(webviewSource.includes('decorateSequenceParticipants(diagram)'));
 		assert.ok(webviewSource.includes('decorateSequenceMessages(diagram)'));
 		assert.ok(webviewSource.includes('decorateSequenceControls(diagram)'));

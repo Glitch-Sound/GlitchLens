@@ -48,8 +48,10 @@ try {
 		theme: 'base',
 		themeVariables: resolveThemeVariables(),
 		sequence: {
-			actorMargin: 60,
+			actorMargin: 40,
 			messageMargin: 45,
+			diagramMarginX: 8,
+			diagramMarginY: 8,
 			boxMargin: 8,
 			boxTextMargin: 5,
 			noteMargin: 16,
@@ -97,6 +99,7 @@ async function renderMermaidDiagram() {
 	try {
 		const result = await mermaid.render('glitchlens-mermaid-diagram', buildMermaidRenderText(mermaidText));
 		diagram.innerHTML = addNonceToSvgStyles(result.svg, GLITCHLENS_VIEW_MODEL.cspNonce);
+		centerParticipantLabels(diagram);
 		decorateSequenceParticipants(diagram);
 		decorateSequenceMessages(diagram);
 		decorateSequenceControls(diagram);
@@ -222,6 +225,17 @@ function decorateSequenceParticipants(diagram) {
 		if (label === 'root' || (rootName && label === rootName)) {
 			findControlGroup(text)?.classList.add('glitchlens-root-participant');
 		}
+	}
+}
+
+function centerParticipantLabels(diagram) {
+	for (const text of diagram.querySelectorAll('svg text.actor.actor-box, svg g.actor text, svg g.actor-top text, svg g.actor-bottom text')) {
+		text.setAttribute('text-anchor', 'middle');
+		text.setAttribute('dominant-baseline', 'middle');
+		text.setAttribute('alignment-baseline', 'middle');
+		text.style.setProperty('text-anchor', 'middle');
+		text.style.setProperty('dominant-baseline', 'middle');
+		text.style.setProperty('alignment-baseline', 'middle');
 	}
 }
 

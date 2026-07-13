@@ -332,6 +332,8 @@ interface CommandController {
 - 長い participant 名、条件式、Call / Await ラベルが途中で切れないよう、Webview 側で Mermaid sequence の participant 間隔、message 間隔、box padding、SVG overflow、text layout を調整する。
 - Mermaid のレイアウト計算結果を尊重し、SVG 生成後に `textLength`、`lengthAdjust`、SVG text の `font-size` を破壊的に変更しない。
 - 図全体は `useMaxWidth` を有効にして Webview 幅へ自然に収める。文字切れ対策は SVG 後処理ではなく、Mermaid sequence 設定の余白や幅計算を優先して調整する。
+- participant 名は上下の actor box 内で水平方向・垂直方向に中央揃えし、十分な上下左右の余白を確保する。SVG 生成後は対応する actor の `text` 要素へ `text-anchor: middle`、`dominant-baseline: middle`、`alignment-baseline: middle` を付与する。
+- Mermaid が生成した `x`、`y`、`textLength`、`lengthAdjust` は維持し、participant 名のはみ出し防止は Mermaid のレイアウト計算を優先する。SVG 生成後にこれらの text 属性を破壊的に変更しない。
 - `SourceMap` は内部データとして `VisualizationViewModel` に保持するが、Marketplace 公開版の Webview では画面下部の Source locations 一覧を表示しない。
 - Copy Mermaid は表示中の Mermaid text をコピーする既存操作として維持し、SVG 装飾や Source locations 非表示の影響を受けない。
 
