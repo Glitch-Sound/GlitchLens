@@ -197,3 +197,35 @@
 - 10.6: participant 名を actor box 内で水平・垂直中央揃えし、Mermaid の text layout 属性を保持したまま長い名前のはみ出しを防止した。
 - 10.7: Mermaidの実SVGでactor textが直接`text.actor.actor-box`になる構造にも対応し、中央揃え指定を確実に適用した。
 - 10.8: Control Block の配色はMermaid既定CSSとの競合を避けるため描画後SVGへ直接適用し、枠線を実線・3pxで表示する。重複するVisualizationView側のControl Block CSSは削除した。
+
+- [ ] 11. Mermaid表示操作: 初期倍率固定、ズーム、パン、余白改善を実装する
+- [x] 11.1 WebViewの表示状態と操作UIを設計・実装する
+  - 固定初期倍率、最小倍率、最大倍率、ズームステップ、パン位置、リセット操作をWebView表示層に定義する。
+  - 拡大縮小とドラッグ移動をSVG外側のラッパーtransformで処理し、SVG内部のレイアウト属性を変更しない。
+  - 拡大率表示、拡大・縮小、リセットの操作UIまたは同等のユーザー認識手段を提供する。
+  - _Boundary: VisualizationView / Webview Mermaid_
+  - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.8_
+- [x] 11.2 ドラッグによるパン操作と入力競合対策を実装する
+  - ポインター操作で図を移動でき、ドラッグ中のテキスト選択とページ全体の意図しないスクロールを抑止する。
+  - 図の再描画、fallback、リセット時の状態遷移を定義し、異常な移動値を適用しない。
+  - _Depends: 11.1_
+  - _Boundary: Webview Mermaid interaction_
+  - _Requirements: 9.5, 9.6, 9.7, 9.10_
+- [ ] 11.3 Mermaid sequenceレイアウトの縦方向余白を調整する
+  - 通常規模、大規模、長いラベルを含むfixtureでmessage、diagram、box、note間隔を比較する。
+  - 縦方向の詰まりを軽減しつつ、横方向の可読性と過度な図の巨大化を悪化させない採用値を固定する。
+  - _Depends: 11.1_
+  - _Boundary: Webview Mermaid layout_
+  - _Requirements: 9.9_
+- [ ] 11.4 WebView操作と既存表示機能のテストを追加する
+  - 異なる関数規模で初期倍率が固定され、ズーム境界とリセットが機能することを検証する。
+  - パン操作、縦方向余白、SVG装飾、SourceMap、Copy Mermaid、CSP、fallbackの回帰を検証する。
+  - _Depends: 11.1, 11.2, 11.3_
+  - _Boundary: VisualizationView tests / Webview Mermaid tests_
+  - _Requirements: 9.1, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10_
+- [ ] 11.5 品質ゲートと実機相当の表示確認を行う
+  - `check-types`、lint、compile、unit test、VS Code integration testを実行する。
+  - WebView上で通常規模・大規模の図を表示し、固定初期倍率、ズーム、パン、リセット、縦方向余白を目視確認する。
+  - _Depends: 11.4_
+  - _Boundary: Integration validation_
+  - _Requirements: 9.1, 9.2, 9.3, 9.5, 9.6, 9.9, 9.10_

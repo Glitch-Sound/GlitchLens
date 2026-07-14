@@ -657,6 +657,58 @@ erDiagram
 - Workspace Trust は package manifest と runtime guard の両方で考慮する。Restricted Mode では安全に動作できる静的表示だけを許可するか、機能を明示的に制限する。
 - Clipboard はユーザー操作でのみ実行する。
 
+## Display Interaction Design: Zoom, Pan, and Sequence Spacing
+
+表示倍率、ドラッグ移動、余白調整は Visualization / Webview 層の責務とする。MermaidRenderer、Common Flow Model、Mermaidコピー対象テキスト、SourceMap contract は変更しない。
+
+### Display State
+
+WebViewは、描画済みSVGの外側にある表示ラッパーで `scale`、`translateX`、`translateY` を管理する。初期状態は固定された基準倍率と原点の移動量とし、図の自然サイズや関数規模から初期倍率を再計算しない。最小倍率・最大倍率・ズームステップはWebView側の定数として一元管理し、リセット時に初期値へ戻す。
+
+SVG内部の `x`、`y`、`textLength`、`lengthAdjust`、font-size は変更せず、表示ラッパーへのtransformで倍率と移動を適用する。これにより、Mermaidのレイアウト、既存のSVG装飾、SourceMap、コピー処理を分離して維持する。
+
+### User Interaction
+
+- 拡大・縮小はWebViewで一般的なポインター／ホイール操作に対応する。
+- 拡大・縮小には最小倍率・最大倍率を設ける。
+- リセット操作で固定初期倍率と初期パン位置へ戻す。
+- 拡大状態ではポインターによるドラッグで図を移動できる。
+- ドラッグ中は `user-select: none` 等でテキスト選択を抑止し、図の表示領域外への意図しないページスクロールを抑止する。
+- 拡大縮小とパンの現在状態を必要に応じてUIで認識できるようにする。
+- Mermaid描画失敗時のfallback表示では、既存のテキスト表示を優先する。
+
+### Pan State and Pointer Events
+
+Viewerの表示状態は、WebView表示層で次の値を一元管理する。
+
+- `currentScale`: 現在の倍率
+- `currentTranslateX`: ViewerのX方向移動量（px）
+- `currentTranslateY`: ViewerのY方向移動量（px）
+
+ZoomとPanは同じViewer wrapperのCSS transformへ反映し、順序は `translate(x, y) scale(scale)` に統一する。SVG内部の座標、属性、レイアウトは変更せず、Mermaidの再描画も行わない。100%リセットとFitはscaleだけでなくtranslateも初期位置へ戻し、その後もZoomとPanを継続利用できるようにする。
+
+Pan入力にはPointer Eventsを使用する。Viewer上のprimary pointerの`pointerdown`で開始し、`setPointerCapture`でポインターがWebView外へ出ても同じViewerが`pointermove`を受け取れるようにする。`pointerup`、`pointercancel`、`lostpointercapture`では必ず`releasePointerCapture`を試行し、ドラッグ状態と`user-select`抑止を解除する。
+
+UIボタン、Copy Mermaid、リンク、フォーム要素をPan開始対象から除外する。ドラッグ中だけ`preventDefault`を適用し、通常クリック、Mermaid内リンク、WebViewの通常スクロールとの競合を抑える。Viewerには`touch-action: pan-y`を設定し、トラックパッド等のポインター入力と通常の縦スクロールを共存させる。
+
+translate値は有限値であることを確認し、NaN、Infinity、異常に大きい値をCSSへ適用しない。実装上のtranslate上限を設け、scaleとtranslateの更新は必ず同一の状態更新関数を経由する。
+
+### Mermaid Layout Configuration
+
+縦方向の詰まりを改善するため、`messageMargin`、`diagramMarginY`、`boxMargin`、`noteMargin` など既存のsequence設定を見直す。採用値は実装時に通常規模・大規模・長いラベルのfixtureで比較し、横方向の可読性と図の過度な巨大化を両立する値として固定する。`useMaxWidth` による自動倍率変更が固定初期倍率と競合しないよう、Mermaidレイアウトの幅計算とWebView表示transformの責務を分離する。
+
+### Security and Compatibility
+
+操作用スクリプトは既存のCSP nonce付きWebViewスクリプトに含め、外部CDN・外部ネットワークを使用しない。既存のCopy Mermaid、SourceMap、participant/control block/activation装飾、fallback、Workspace Trustの制約を維持する。
+
+### Traceability
+
+| Requirement | Components | Verification |
+|-------------|------------|--------------|
+| 9.1-9.5 | VisualizationView, Webview display controller | 異なる規模の図で固定初期倍率、境界、リセットを確認 |
+| 9.6-9.8 | Webview display controller | ドラッグ、ズーム、コピー、SourceMap、SVG装飾の非干渉を確認 |
+| 9.9-9.10 | Webview Mermaid configuration, fallback view | 縦方向余白と描画失敗時fallbackを確認 |
+
 ## Testing Strategy
 
 ### Unit Tests

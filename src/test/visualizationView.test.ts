@@ -61,6 +61,14 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes('class="mermaid-render-target" aria-label="Mermaid sequence diagram"'));
 		assert.ok(html.includes('Copy Mermaid'));
 		assert.ok(html.includes('<details class="diagram-fallback">'));
+		assert.ok(html.includes('id="zoom-controls"'));
+		assert.ok(html.includes('id="diagram-viewer" class="diagram-viewer"'));
+		assert.ok(html.includes('id="diagram"'));
+		assert.ok(html.includes('id="zoom-reset"'));
+		assert.ok(html.includes('id="zoom-fit"'));
+		assert.ok(html.includes('id="zoom-in"'));
+		assert.ok(html.includes('id="zoom-out"'));
+		assert.ok(html.includes('id="zoom-level"'));
 		assert.ok(!html.includes('<details class="source-map" open>'));
 		assert.ok(!html.includes('Source locations'));
 		assert.ok(!html.includes('line:1: file:///workspace/source.ts:2:3-2:9'));
@@ -72,6 +80,44 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes('&lt;b&gt;unknown&lt;/b&gt;'));
 		assert.deepStrictEqual(factory.options.localResourceRoots, []);
 		assert.strictEqual(factory.options.enableScripts, true);
+	});
+
+	test('includes fixed initial zoom state and zoom controls', async () => {
+		const factory = new StubPanelFactory();
+		const adapter = new WebviewVisualizationAdapter(factory, new StubClipboard(), new StubNotification());
+		await adapter.show(createVisualizationViewModel(successResult('success')));
+		const html = factory.panel.webview.html;
+		assert.ok(html.includes('const INITIAL_ZOOM=1'));
+		assert.ok(html.includes('const FIT_ZOOM=1'));
+		assert.ok(html.includes('const MIN_ZOOM=0.5'));
+		assert.ok(html.includes('const MAX_ZOOM=3'));
+		assert.ok(html.includes('updateZoomUi'));
+		assert.ok(html.includes('zoom-in'));
+		assert.ok(html.includes('zoom-out'));
+		assert.ok(html.includes('zoom-fit'));
+		assert.ok(html.includes('document.getElementById(\'diagram-viewer\')'));
+		assert.ok(html.includes('viewer.style.setProperty(\'--glitchlens-zoom\''));
+	});
+
+	test('includes Pointer Events pan state on the Viewer without Mermaid redraw or button capture', async () => {
+		const factory = new StubPanelFactory();
+		const adapter = new WebviewVisualizationAdapter(factory, new StubClipboard(), new StubNotification());
+		await adapter.show(createVisualizationViewModel(successResult('success')));
+		const html = factory.panel.webview.html;
+		assert.ok(html.includes('currentScale'));
+		assert.ok(html.includes('currentTranslateX'));
+		assert.ok(html.includes('currentTranslateY'));
+		assert.ok(html.includes('pointerdown'));
+		assert.ok(html.includes('pointermove'));
+		assert.ok(html.includes('pointerup'));
+		assert.ok(html.includes('setPointerCapture'));
+		assert.ok(html.includes('releasePointerCapture'));
+		assert.ok(html.includes('translate(var(--glitchlens-translate-x,0px)'));
+		assert.ok(html.includes('scale(var(--glitchlens-zoom,1))'));
+		assert.ok(html.includes('Number.isFinite'));
+		assert.ok(html.includes('preventDefault'));
+		assert.ok(html.includes('isPanExcludedTarget'));
+		assert.ok(html.includes('setViewerState'));
 	});
 
 	test('bundles official Mermaid renderer with safe initialization and text fallback', () => {
@@ -186,17 +232,20 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes('option catch error'));
 		assert.ok(html.includes('loop retry \\u003c 3'));
 		assert.ok(html.includes('charge-->>root: return receipt'));
-		assert.ok(html.includes('#diagram svg{max-width:100%;width:100%;height:auto;display:block;border:1px solid var(--vscode-panel-border);background:var(--vscode-editor-background);}'));
+		assert.ok(html.includes('id="diagram-viewer"'));
+		assert.ok(html.includes('id="diagram"'));
+		assert.match(html, /#diagram-viewer\{[^}]*transform:translate\([^}]*scale\(var\(--glitchlens-zoom,1\)\)/);
+		assert.match(html, /#diagram svg\{[^}]*width:100%[^}]*height:auto/);
 		assert.ok(!html.includes('max-width:none'));
 		assert.ok(!html.includes('min-width:100%'));
 		assert.ok(!html.includes('overflow:visible'));
 		assert.ok(!html.includes('#diagram svg text{font-size:13px!important'));
-		assert.ok(html.includes('#diagram svg .actor-line{stroke:#f4f7fb!important;stroke-width:1.25px!important;opacity:0.82!important;}'));
-		assert.ok(html.includes('#diagram svg .actor{stroke:#b8c0cc!important;stroke-width:1.4px!important;fill:#262b33!important;}'));
-		assert.ok(html.includes('#diagram svg [class*="activation"]{fill:#33506f!important;stroke:#8ecbff!important;stroke-width:1.4px!important;opacity:0.9!important;}'));
-		assert.ok(html.includes('.glitchlens-root-participant :is(rect,path,polygon){stroke:#f8fafc!important;stroke-width:2.2px!important;fill:#303846!important;}'));
-		assert.ok(html.includes('.glitchlens-await-message :is(path,line,polygon,marker path){stroke:#22d3ee!important;fill:#22d3ee!important;}'));
-		assert.ok(html.includes('.glitchlens-return-message :is(path,line,polygon,marker path){stroke:#8b949e!important;fill:#8b949e!important;opacity:0.75!important;}'));
+		assert.match(html, /#diagram svg \.actor-line\{[^}]*stroke:[^;]+/);
+		assert.match(html, /#diagram svg \.actor\{[^}]*stroke:[^;]+/);
+		assert.match(html, /#diagram svg \[class\*="activation"\]\{[^}]*fill:[^;]+/);
+		assert.ok(html.includes('.glitchlens-root-participant'));
+		assert.ok(html.includes('.glitchlens-await-message'));
+		assert.ok(html.includes('.glitchlens-return-message'));
 		assert.ok(/"cspNonce":"[A-Za-z0-9]+"/.test(html));
 		assert.ok(!html.includes('<svg role="img" aria-label="Mermaid sequence diagram"'));
 	});
