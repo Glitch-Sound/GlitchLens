@@ -211,19 +211,19 @@
   - _Depends: 11.1_
   - _Boundary: Webview Mermaid interaction_
   - _Requirements: 9.5, 9.6, 9.7, 9.10_
-- [ ] 11.3 Mermaid sequenceレイアウトの縦方向余白を調整する
+- [x] 11.3 Mermaid sequenceレイアウトの縦方向余白を調整する
   - 通常規模、大規模、長いラベルを含むfixtureでmessage、diagram、box、note間隔を比較する。
   - 縦方向の詰まりを軽減しつつ、横方向の可読性と過度な図の巨大化を悪化させない採用値を固定する。
   - _Depends: 11.1_
   - _Boundary: Webview Mermaid layout_
   - _Requirements: 9.9_
-- [ ] 11.4 WebView操作と既存表示機能のテストを追加する
+- [x] 11.4 WebView操作と既存表示機能のテストを追加する
   - 異なる関数規模で初期倍率が固定され、ズーム境界とリセットが機能することを検証する。
   - パン操作、縦方向余白、SVG装飾、SourceMap、Copy Mermaid、CSP、fallbackの回帰を検証する。
   - _Depends: 11.1, 11.2, 11.3_
   - _Boundary: VisualizationView tests / Webview Mermaid tests_
   - _Requirements: 9.1, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10_
-- [ ] 11.5 品質ゲートと実機相当の表示確認を行う
+- [x] 11.5 品質ゲートと実機相当の表示確認を行う
   - `check-types`、lint、compile、unit test、VS Code integration testを実行する。
   - WebView上で通常規模・大規模の図を表示し、固定初期倍率、ズーム、パン、リセット、縦方向余白を目視確認する。
   - _Depends: 11.4_

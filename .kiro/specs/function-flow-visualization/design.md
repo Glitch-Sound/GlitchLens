@@ -697,6 +697,10 @@ translate値は有限値であることを確認し、NaN、Infinity、異常に
 
 縦方向の詰まりを改善するため、`messageMargin`、`diagramMarginY`、`boxMargin`、`noteMargin` など既存のsequence設定を見直す。採用値は実装時に通常規模・大規模・長いラベルのfixtureで比較し、横方向の可読性と図の過度な巨大化を両立する値として固定する。`useMaxWidth` による自動倍率変更が固定初期倍率と競合しないよう、Mermaidレイアウトの幅計算とWebView表示transformの責務を分離する。
 
+Task 11.3では、縦方向の可読性を優先して次の値を採用する。`messageMargin: 56`（45から約24%増）、`noteMargin: 20`（16から25%増）、`diagramMarginY: 10`（8から25%増）、`boxMargin: 10`（8から25%増）、`boxTextMargin: 6`（5から20%増）。横方向に影響する`actorMargin: 40`、`diagramMarginX: 8`、`useMaxWidth: true`は変更しない。
+
+採用値は通常規模、多数のCall / Await、nested loop / branch、try / catch / finally、長いparticipant名・条件式を含むMermaid fixtureで比較する。比較ではCall / Await、Note、Control Structure内部・境界の余白、全体の縦サイズ、横方向の可読性、過度な巨大化、participant名の収まりを確認する。余白はMermaid初期化設定でのみ調整し、SVG生成後のDOM操作で`x`、`y`、`textLength`、`lengthAdjust`、font-size等のレイアウト値を変更しない。
+
 ### Security and Compatibility
 
 操作用スクリプトは既存のCSP nonce付きWebViewスクリプトに含め、外部CDN・外部ネットワークを使用しない。既存のCopy Mermaid、SourceMap、participant/control block/activation装飾、fallback、Workspace Trustの制約を維持する。

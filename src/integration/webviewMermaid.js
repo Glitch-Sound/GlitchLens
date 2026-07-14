@@ -49,12 +49,12 @@ try {
 		themeVariables: resolveThemeVariables(),
 		sequence: {
 			actorMargin: 40,
-			messageMargin: 45,
+			messageMargin: 56,
 			diagramMarginX: 8,
-			diagramMarginY: 8,
-			boxMargin: 8,
-			boxTextMargin: 5,
-			noteMargin: 16,
+			diagramMarginY: 10,
+			boxMargin: 10,
+			boxTextMargin: 6,
+			noteMargin: 20,
 			useMaxWidth: true,
 		},
 	});

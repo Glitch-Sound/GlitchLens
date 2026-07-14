@@ -128,11 +128,12 @@ suite('VisualizationView', () => {
 		assert.ok(webviewSource.includes("securityLevel: 'strict'"));
 		assert.ok(webviewSource.includes("theme: 'base'"));
 		assert.ok(webviewSource.includes('actorMargin: 40'));
-		assert.ok(webviewSource.includes('messageMargin: 45'));
+		assert.ok(webviewSource.includes('messageMargin: 56'));
 		assert.ok(webviewSource.includes('diagramMarginX: 8'));
-		assert.ok(webviewSource.includes('diagramMarginY: 8'));
-		assert.ok(webviewSource.includes('boxMargin: 8'));
-		assert.ok(webviewSource.includes('boxTextMargin: 5'));
+		assert.ok(webviewSource.includes('diagramMarginY: 10'));
+		assert.ok(webviewSource.includes('boxMargin: 10'));
+		assert.ok(webviewSource.includes('boxTextMargin: 6'));
+		assert.ok(webviewSource.includes('noteMargin: 20'));
 		assert.ok(webviewSource.includes('useMaxWidth: true'));
 		assert.ok(!webviewSource.includes('useMaxWidth: false'));
 		assert.ok(webviewSource.includes('getComputedStyle(document.documentElement)'));
@@ -248,6 +249,79 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes('.glitchlens-return-message'));
 		assert.ok(/"cspNonce":"[A-Za-z0-9]+"/.test(html));
 		assert.ok(!html.includes('<svg role="img" aria-label="Mermaid sequence diagram"'));
+	});
+
+	test('guards the Task 11.1-11.3 Viewer and Mermaid regression contract', async () => {
+		const webviewSource = fs.readFileSync(path.resolve(__dirname, '../../src/integration/webviewMermaid.js'), 'utf8');
+		const viewSource = fs.readFileSync(path.resolve(__dirname, '../../src/integration/visualizationView.ts'), 'utf8');
+		const factory = new StubPanelFactory();
+		const adapter = new WebviewVisualizationAdapter(factory, new StubClipboard(), new StubNotification());
+		const mermaidText = [
+			'sequenceDiagram',
+			'participant root as processOrders',
+			'loop orders',
+			'root->>load: await load',
+			'alt order.status',
+			'root->>charge: charge',
+			'else',
+			'root->>notify: notify',
+			'end',
+			'critical try',
+			'root->>save: save',
+			'option catch error',
+			'root->>error: error',
+			'end',
+			'end',
+		].join('\n');
+
+		await adapter.show(createVisualizationViewModel(successResult('success', { mermaidText })));
+		const html = factory.panel.webview.html;
+
+		for (const id of ['zoom-in', 'zoom-out', 'zoom-reset', 'zoom-fit', 'zoom-level', 'diagram-viewer', 'diagram']) {
+			assert.ok(html.includes(`id="${id}"`));
+		}
+		for (const state of ['currentScale', 'currentTranslateX', 'currentTranslateY', 'setViewerState']) {
+			assert.ok(html.includes(state));
+		}
+		assert.ok(html.includes('const INITIAL_ZOOM=1'));
+		assert.ok(html.includes('const MIN_ZOOM=0.5'));
+		assert.ok(html.includes('const MAX_ZOOM=3'));
+		assert.ok(html.includes('pointerdown'));
+		assert.ok(html.includes('pointermove'));
+		assert.ok(html.includes('pointerup'));
+		assert.ok(html.includes('pointercancel'));
+		assert.ok(html.includes('setPointerCapture'));
+		assert.ok(html.includes('releasePointerCapture'));
+		assert.ok(html.includes('isPanExcludedTarget'));
+		assert.ok(html.includes('Number.isFinite'));
+		assert.ok(html.includes('preventDefault'));
+
+		assert.ok(html.includes('sequenceDiagram'));
+		assert.ok(html.includes('Copy Mermaid'));
+		assert.ok(html.includes('<details class="diagram-fallback">'));
+		assert.ok(!html.includes('Source locations'));
+		assert.ok(/script-src 'nonce-[A-Za-z0-9]+'/.test(html));
+		assert.ok(!html.includes('unsafe-inline'));
+		assert.ok(!html.includes('https://cdn'));
+		assert.ok(!html.includes('unpkg.com'));
+
+		for (const className of [
+			'glitchlens-control-loop',
+			'glitchlens-control-alt',
+			'glitchlens-control-opt',
+			'glitchlens-control-critical',
+			'glitchlens-control-option',
+			'glitchlens-root-participant',
+			'glitchlens-await-message',
+		]) {
+			assert.ok(webviewSource.includes(className));
+		}
+		assert.ok(webviewSource.includes('activate ${rootParticipantId}'));
+		assert.ok(webviewSource.includes('activate ${message.to}'));
+		assert.ok(webviewSource.includes('mermaid.render'));
+		assert.ok(webviewSource.includes('showFallback(diagram, mermaidText)'));
+		assert.ok(viewSource.includes('readWebviewMermaidScript'));
+		assert.ok(!viewSource.includes('mermaid.render'));
 	});
 
 	test('reuses the same panel and replaces stale content safely', async () => {
