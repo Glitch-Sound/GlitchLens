@@ -335,3 +335,32 @@
   - _Depends: 13.3_
   - _Boundary: Integration validation_
   - _Requirements: 4.2, 4.3, 5.1, 5.2, 7.2, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10, 9.11, 9.12, 9.13, 9.14, 9.15, 9.16, 9.17, 9.18, 9.19, 9.20, 9.21, 9.22_
+
+- [x] 14. 可視化コントロールのUIを再構成する
+- [x] 14.1 内部状態表示を削除し、既存noticeを維持する
+  - 関数名直下の内部状態名表示だけを削除し、内部状態管理とnotice生成は変更しない。
+  - Observable completion: success等はHTMLに出力されず、warning/error/unresolved/partial noticeは表示される。
+  - _Requirements: 6.2, 6.4, 8.5, 10.1, 10.2, 10.3_
+  - _Boundary: VisualizationView_
+
+- [x] 14.2 ツールバーを1行へ再配置し、既存操作を維持する
+  - `Copy Mermaid`、`100%`、`Fit`、`-`、`x%`、`+` の順で同一行の左側に配置する。
+  - Observable completion: 既存のズーム・Fit・リセット・Copy MermaidイベントとView ID通信を維持したHTMLが生成される。
+  - _Requirements: 5.1, 5.2, 9.1, 9.7, 9.8, 9.9, 10.4, 10.5, 10.6_
+  - _Boundary: VisualizationView / Webview interaction_
+  - _Depends: 14.1_
+
+- [x] 14.3 テーマ対応のボタン配色と状態表示を実装する
+  - ズームボタンをテーマ近似色、Copy Mermaidを目立ちすぎないテーマ寄りの青系背景とし、hover、focus-visible、disabledの視認性を定義する。
+  - Observable completion: Dark / Lightテーマと通常幅・狭い幅で、文字と背景のコントラストおよびフォーカス表示を確認できる。
+  - _Requirements: 10.7, 10.8, 10.9_
+  - _Boundary: VisualizationView CSS_
+  - _Depends: 14.2_
+
+- [x] 14.4 UI改善の回帰検証と品質ゲートを行う
+  - HTMLの状態名非表示、notice維持、コントロール順序、非操作倍率表示、テーマCSS、既存IDをテストする。
+  - 既存のズーム、Fit、Copy Mermaid、fallback、SourceMap、SVG装飾、CSP、Workspace Trust通知を回帰確認する。
+  - Observable completion: WebView目視確認と `npm run check-types`、`npm run lint`、`npm run compile`、`npm run test:unit`、`npm run test:integration` が成功する。
+  - _Requirements: 4.2, 5.1, 5.2, 6.2, 6.4, 8.5, 9.1, 9.7, 9.8, 9.9, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 10.10_
+  - _Boundary: VisualizationView tests / Integration validation_
+  - _Depends: 14.3_

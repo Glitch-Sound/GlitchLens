@@ -3,6 +3,26 @@
 ## Summary
 
 - **Feature**: `function-flow-visualization`
+
+## UI改善要件の設計調査
+
+### 主な発見
+
+1. 内部状態名は `renderHtml` の `<p>` 要素で直接表示されている。状態値自体は解析判定に使われるため、表示要素だけを削除するのが最小変更となる。
+2. ズーム操作はDOM ID、Copy Mermaidは `copyMermaid` メッセージと `viewId` に依存する。配置変更時もこれらの契約を維持すれば機能影響はない。
+3. 配色はVS Code WebView CSS変数で完結でき、追加依存や外部ネットワークは不要である。`--vscode-button-*` と `--vscode-button-secondary*` を優先し、フォールバック色と `:focus-visible` を定義する。
+
+### 設計判断
+
+- Requirement 10 を既存の表示倍率・Copy・通知要件と分離して追加する。
+- user-visible notice は内部状態名と異なるため維持する。
+- ツールバーは `VisualizationView` に閉じ込め、Common Flow Model、Renderer、SourceMap、Clipboard adapterの契約は変更しない。
+- 生成HTMLの要素順序・既存ID・CSS変数をテストし、Dark / Lightと狭い幅は目視確認で補完する。
+
+### リスクと対策
+
+- 狭いWebView幅で右寄せ配置が圧迫される可能性があるため、flex設定とボタン余白を実機相当表示で確認する。
+- VS Codeテーマごとのコントラスト差をDark / Light双方で確認する。
 - **Discovery Scope**: Extension / Integration-focused discovery
 - **Key Findings**:
   - 既存コードは VS Code 拡張テンプレートに近く、`src/extension.ts` と `package.json` の command contribution が主な統合点である。
@@ -123,6 +143,12 @@
 - **Findings**: 外側viewportと内側canvasを同一要素で兼ねている。CSS transformは適用要素の視覚的な大きさも変更するため、viewportの固定と内容のズームを同時に満たせない。
 - **Implications**: `#diagram-viewer`を固定viewport、内側ラッパーをcanvasとして分離し、transformはcanvasだけへ適用する。Fitはviewport寸法を基準にcanvas倍率を計算する。
 - **Decision**: UI上の倍率と実効描画倍率を分離する。UI 100%は`uiScale=1`とし、初期見た目の微調整は`INITIAL_RENDER_SCALE`固定係数で管理する。Mermaid text、SourceMap、SVG装飾、Copy Mermaid、コードジャンプは表示状態から独立させる。
+
+### 追加UI変更の設計更新
+
+- コントロール順序を `Copy Mermaid`、`100%`、`Fit`、`-`、`x%`、`+` の左寄せ1行へ変更した。
+- Copy Mermaid はプライマリボタン色を避け、`--vscode-button-secondaryBackground` と `--vscode-textLink-foreground` を利用し、濃い青系フォールバックを設定する。
+- 右端配置用の自動マージンは使用せず、既存のDOM ID、ズームイベント、Copy Mermaidメッセージ契約は維持する。
 
 ## Risks & Mitigations
 

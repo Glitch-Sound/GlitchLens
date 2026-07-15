@@ -62,6 +62,8 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes('Copy Mermaid'));
 		assert.ok(html.includes('<details class="diagram-fallback">'));
 		assert.ok(html.includes('id="zoom-controls"'));
+		assert.ok(html.includes('#zoom-controls{display:flex;align-items:center;gap:12px'));
+		assert.ok(html.includes('#zoom-controls .zoom-group{display:flex;align-items:center;gap:12px'));
 		assert.ok(html.includes('id="diagram-viewer" class="diagram-viewer"'));
 		assert.ok(html.includes('id="diagram-canvas" class="diagram-canvas"'));
 		assert.ok(html.includes('id="diagram"'));
@@ -81,6 +83,30 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes('&lt;b&gt;unknown&lt;/b&gt;'));
 		assert.deepStrictEqual(factory.options.localResourceRoots, []);
 		assert.strictEqual(factory.options.enableScripts, true);
+	});
+
+	test('renders the compact themed toolbar without exposing internal state names', async () => {
+		const factory = new StubPanelFactory();
+		const adapter = new WebviewVisualizationAdapter(factory, new StubClipboard(), new StubNotification());
+		await adapter.show(createVisualizationViewModel(successResult('success', {
+			notices: [notice('unknown-call', 'warning', 'Call could not be resolved.')],
+		})));
+
+		const html = factory.panel.webview.html;
+		assert.ok(!html.includes('<p>success</p>'));
+		assert.ok(html.includes('Call could not be resolved.'));
+		assert.ok(html.includes('id="zoom-controls"'));
+		assert.ok(html.indexOf('id="copy-mermaid"') < html.indexOf('id="zoom-reset"'));
+		assert.ok(html.indexOf('id="zoom-reset"') < html.indexOf('id="zoom-fit"'));
+		assert.ok(html.indexOf('id="zoom-fit"') < html.indexOf('id="zoom-out"'));
+		assert.ok(html.indexOf('id="zoom-out"') < html.indexOf('id="zoom-level"'));
+		assert.ok(html.indexOf('id="zoom-level"') < html.indexOf('id="zoom-in"'));
+		assert.ok(!html.includes('margin-left:auto'));
+		assert.ok(html.includes('--vscode-button-secondaryBackground'));
+		assert.ok(html.includes('--vscode-button-secondaryForeground'));
+		assert.ok(html.includes('--vscode-textLink-foreground'));
+		assert.ok(html.includes('#2d4f73'));
+		assert.ok(html.includes(':focus-visible'));
 	});
 
 	test('includes fixed initial zoom state and zoom controls', async () => {
