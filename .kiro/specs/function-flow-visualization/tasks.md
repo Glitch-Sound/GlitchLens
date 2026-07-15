@@ -152,6 +152,7 @@
   - Mermaid公式RendererをWebview内のローカルbundleとして使用し、外部CDNや外部ネットワークへ依存しない。
   - Mermaid初期化では `currentColor` や未解決CSS変数を渡さず、解決済みの実色または安全なfallback色を使用する。
   - `loop`、`alt`、`opt`、`critical`、`option` を種類別のアクセントカラーで表示し、枠線、ラベル、必要な文字色へ適用する。
+  - Control Block の枠線を `1.8px`、ラベル文字を `14px` として表示する。ラベル枠幅の追加調整用定義値は設けず、Mermaid の自然な幅計算を維持する。
   - Mermaid描画失敗時は Mermaid text を fallback 表示し、Copy Mermaid は従来どおり動作する。
   - Mermaid text、Common Flow Model、Renderer contract は変更しない。
   - _Requirements: 4.2, 4.3, 5.1, 5.2, 7.2_
@@ -196,9 +197,9 @@
 - 10.5: UI-3 の不具合修正として、Mermaid のレイアウト計算を尊重し、SVG の過剰拡大と participant 名のはみ出しを解消した。
 - 10.6: participant 名を actor box 内で水平・垂直中央揃えし、Mermaid の text layout 属性を保持したまま長い名前のはみ出しを防止した。
 - 10.7: Mermaidの実SVGでactor textが直接`text.actor.actor-box`になる構造にも対応し、中央揃え指定を確実に適用した。
-- 10.8: Control Block の配色はMermaid既定CSSとの競合を避けるため描画後SVGへ直接適用し、枠線を実線・3pxで表示する。重複するVisualizationView側のControl Block CSSは削除した。
+- 10.8: Control Block の配色はMermaid既定CSSとの競合を避けるため描画後SVGへ直接適用し、枠線を実線・1.8px、ラベル文字を14pxで表示する。制御ラベル枠の横幅はMermaidの自然な幅計算を維持し、追加調整用の定義値は設けない。重複するVisualizationView側のControl Block CSSは削除した。
 
-- [ ] 11. Mermaid表示操作: 初期倍率固定、ズーム、パン、余白改善を実装する
+- [x] 11. Mermaid表示操作: 初期倍率固定、ズーム、パン、余白改善を実装する
 - [x] 11.1 WebViewの表示状態と操作UIを設計・実装する
   - 固定初期倍率、最小倍率、最大倍率、ズームステップ、パン位置、リセット操作をWebView表示層に定義する。
   - 拡大縮小とドラッグ移動をSVG外側のラッパーtransformで処理し、SVG内部のレイアウト属性を変更しない。

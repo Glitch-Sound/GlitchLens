@@ -163,7 +163,6 @@ suite('VisualizationView', () => {
 		assert.ok(webviewSource.includes('diagramMarginX: 8'));
 		assert.ok(webviewSource.includes('diagramMarginY: 10'));
 		assert.ok(webviewSource.includes('boxMargin: 22'));
-		assert.ok(webviewSource.includes('boxTextMargin: 12'));
 		assert.ok(webviewSource.includes('noteMargin: 20'));
 		assert.ok(webviewSource.includes('useMaxWidth: false'));
 		assert.ok(!webviewSource.includes('useMaxWidth: true'));
@@ -188,6 +187,11 @@ suite('VisualizationView', () => {
 		assert.ok(webviewSource.includes('shape.classList.add(className)'));
 		assert.ok(webviewSource.includes('text.classList.add(className)'));
 		assert.ok(webviewSource.includes("shape.style.setProperty('stroke', color, 'important')"));
+		assert.ok(webviewSource.includes('const CONTROL_STROKE_WIDTH = 1.8'));
+		assert.ok(webviewSource.includes('const CONTROL_LABEL_FONT_SIZE = 14'));
+		assert.ok(!webviewSource.includes('CONTROL_LABEL_BOX_EXTRA_WIDTH'));
+		assert.ok(webviewSource.includes('`${CONTROL_STROKE_WIDTH}px`'));
+		assert.ok(webviewSource.includes('`${CONTROL_LABEL_FONT_SIZE}px`'));
 		assert.ok(webviewSource.includes("shape.style.setProperty('stroke-dasharray', 'none', 'important')"));
 		assert.ok(webviewSource.includes('activate ${rootParticipantId}'));
 		assert.ok(webviewSource.includes('deactivate ${rootParticipantId}'));

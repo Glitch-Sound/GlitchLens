@@ -332,7 +332,7 @@ interface CommandController {
 - Mermaid 描画に失敗した場合は、Application や Renderer の契約を変更せず、表示層で Mermaid text を fallback 表示する。
 - Mermaid text、Common Flow Model、Renderer contract は表示改善のために変更しない。制御構造の配色と装飾は Visualization / Webview 層の責務とする。
 - `loop`、`alt`、`opt`、`critical`、`option` は Webview が描画済み SVG を装飾し、種類ごとに異なるアクセントカラーを枠線、ラベル、必要な文字色へ適用する。
-- Control Block の枠線は Mermaid 既定の `.loopLine` 等のスタイル競合を避けるため、描画後の対象 SVG shape と label text へ `style.setProperty` で実色を直接適用する。枠線は `stroke-dasharray: none`、`stroke-width: 3px` とし、`loop` `#9fd0ff`、`alt` `#8ff2ff`、`opt` `#fde68a`、`critical` `#ddd6fe`、`option` `#fbcfe8` を使用する。
+- Control Block の枠線は Mermaid 既定の `.loopLine` 等のスタイル競合を避けるため、描画後の対象 SVG shape と label text へ `style.setProperty` で実色を直接適用する。枠線は `stroke-dasharray: none`、`stroke-width: 1.8px` とし、`loop` `#9fd0ff`、`alt` `#8ff2ff`、`opt` `#fde68a`、`critical` `#ddd6fe`、`option` `#fbcfe8` を使用する。制御ラベルは `font-size: 14px` とする。制御ラベル枠の横幅を追加調整する専用定義値は設けず、Mermaid の自然な幅計算を維持する。
 - ライフラインと participant 境界線は Webview CSS で背景へ埋もれない明るいグレー系へ調整し、root function の participant は他 participant より少し強い枠線と背景で強調する。
 - 実行中の区間は Webview が描画用 Mermaid text に `activate` / `deactivate` を補助的に加えて Mermaid の activation 表示を利用する。この補助は Webview 内の描画入力だけに限定し、コピー対象の Mermaid text、Common Flow Model、Renderer contract は変更しない。
 - `await` 呼び出しと `return` は Webview が描画済み SVG を装飾し、await は通常 call と区別できるアクセントカラー、return は控えめな色で call と区別する。

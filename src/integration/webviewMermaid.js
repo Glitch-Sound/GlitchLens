@@ -215,6 +215,10 @@ const CONTROL_COLOR_BY_KEYWORD = {
 	option: '#fbcfe8',
 };
 
+// Visual tuning knobs for Mermaid's control-label boxes.
+const CONTROL_STROKE_WIDTH = 1.8;
+const CONTROL_LABEL_FONT_SIZE = 14;
+
 function decorateSequenceControls(diagram) {
 	for (const text of diagram.querySelectorAll('svg text')) {
 		const keyword = readControlKeyword(text.textContent);
@@ -227,11 +231,13 @@ function decorateSequenceControls(diagram) {
 		group?.classList.add(className);
 		text.classList.add(className);
 		text.style.setProperty('fill', color, 'important');
+		text.style.setProperty('font-size', `${CONTROL_LABEL_FONT_SIZE}px`, 'important');
+		text.style.setProperty('font-size', '14px', 'important');
 		for (const shape of group?.querySelectorAll('rect,path,line,polygon') ?? []) {
 			shape.classList.add(className);
 			shape.style.setProperty('stroke', color, 'important');
 			shape.style.setProperty('fill', '#202732', 'important');
-			shape.style.setProperty('stroke-width', '3px', 'important');
+			shape.style.setProperty('stroke-width', `${CONTROL_STROKE_WIDTH}px`, 'important');
 			shape.style.setProperty('stroke-dasharray', 'none', 'important');
 		}
 	}
