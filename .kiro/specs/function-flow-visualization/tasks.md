@@ -213,7 +213,7 @@
   - _Requirements: 9.5, 9.6, 9.7, 9.10_
 - [x] 11.3 Mermaid sequenceレイアウトの縦方向余白を調整する
   - 通常規模、大規模、長いラベルを含むfixtureでmessage、diagram、box、note間隔を比較する。
-  - 縦方向の詰まりを軽減しつつ、横方向の可読性と過度な図の巨大化を悪化させない採用値を固定する。
+  - `messageMargin: 70`、`diagramMarginY: 10`、`boxMargin: 22`、`boxTextMargin: 12`、`noteMargin: 20` を採用し、横方向の可読性と過度な図の巨大化を悪化させない状態に固定する。
   - _Depends: 11.1_
   - _Boundary: Webview Mermaid layout_
   - _Requirements: 9.9_

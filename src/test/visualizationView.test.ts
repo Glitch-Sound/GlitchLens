@@ -128,11 +128,11 @@ suite('VisualizationView', () => {
 		assert.ok(webviewSource.includes("securityLevel: 'strict'"));
 		assert.ok(webviewSource.includes("theme: 'base'"));
 		assert.ok(webviewSource.includes('actorMargin: 40'));
-		assert.ok(webviewSource.includes('messageMargin: 56'));
+		assert.ok(webviewSource.includes('messageMargin: 70'));
 		assert.ok(webviewSource.includes('diagramMarginX: 8'));
 		assert.ok(webviewSource.includes('diagramMarginY: 10'));
-		assert.ok(webviewSource.includes('boxMargin: 10'));
-		assert.ok(webviewSource.includes('boxTextMargin: 6'));
+		assert.ok(webviewSource.includes('boxMargin: 22'));
+		assert.ok(webviewSource.includes('boxTextMargin: 12'));
 		assert.ok(webviewSource.includes('noteMargin: 20'));
 		assert.ok(webviewSource.includes('useMaxWidth: true'));
 		assert.ok(!webviewSource.includes('useMaxWidth: false'));
