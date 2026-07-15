@@ -4,7 +4,7 @@
   "publisher": "glitch-sound",
   "description": "Instantly visualize TypeScript and JavaScript function flow as Mermaid sequence diagrams.",
   "license": "MIT",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
