@@ -229,3 +229,33 @@
   - _Depends: 11.4_
   - _Boundary: Integration validation_
   - _Requirements: 9.1, 9.2, 9.3, 9.5, 9.6, 9.9, 9.10_
+
+- [x] 11.6 WebViewにマウスホイールズームとピンチズームを追加する
+  - マウスホイールの方向と量を共通の表示倍率更新へ変換し、図上の入力だけをズームとして扱う。
+  - 2本のポインターの距離変化をピンチ操作として扱い、単一ポインターのドラッグパンと状態を分離する。
+  - 既存の最小・最大倍率、有限値検証、`translate` / `scale` 更新契約をホイール・ピンチにも適用する。
+  - ピンチ終了、pointer cancel、pointer capture 解除後に通常のパンと縦スクロールへ復帰できる状態にする。
+  - Observable completion: マウスホイールとトラックパッド／タッチのピンチで表示倍率が変化し、倍率範囲外の値が適用されない。
+  - _Depends: 11.1, 11.2_
+  - _Boundary: VisualizationView / Webview Mermaid interaction_
+  - _Requirements: 9.2, 9.3, 9.4, 9.6, 9.7, 9.11, 9.12, 9.13_
+
+- [x] 11.7 WebViewのホイール・ピンチ操作テストを追加する
+  - ホイールイベントの正負・量、ピンチの距離増減、最小・最大倍率のクランプを検証する。
+  - 2本指操作中にパンが開始されず、ジェスチャー終了後に単一ポインターのパンと通常の縦スクロールが復帰することを検証する。
+  - 既存のボタン操作、リセット、Copy Mermaid、SVG装飾、SourceMap、fallback、CSPの回帰を維持する。
+  - Observable completion: `visualizationView.test.ts` で 9.11〜9.13 の入力契約と既存表示機能の非干渉が確認できる。
+  - _Depends: 11.6_
+  - _Boundary: VisualizationView tests / Webview Mermaid tests_
+  - _Requirements: 9.4, 9.7, 9.8, 9.10, 9.11, 9.12, 9.13_
+
+- [x] 11.8 ズーム入力の実機相当検証と品質ゲートを行う
+  - マウスホイール、macOSトラックパッドのピンチ、タッチ入力相当のポインター列で倍率変更を確認する。
+  - 通常の縦スクロール、ドラッグパン、リセット、図の再描画、fallback復帰が入力後も利用できることを確認する。
+  - `check-types`、lint、compile、unit test、VS Code integration test を実行し、既存の表示操作回帰がないことを確認する。
+  - Observable completion: Requirement 9.1〜9.13 に対応するテストと表示確認が成功し、既存の Mermaid テキスト、SourceMap、SVG装飾に変更がない。
+  - _Depends: 11.7_
+  - _Boundary: Integration validation_
+  - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10, 9.11, 9.12, 9.13_
+
+- 11.6-11.8: マウスホイールと2本ポインターのピンチを既存の表示倍率状態へ統合し、通常のパン・縦スクロール・fallback・既存表示機能との回帰を統合テストで確認した。

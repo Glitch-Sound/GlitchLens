@@ -295,6 +295,13 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes('isPanExcludedTarget'));
 		assert.ok(html.includes('Number.isFinite'));
 		assert.ok(html.includes('preventDefault'));
+		assert.ok(html.includes("addEventListener('wheel'"));
+		assert.ok(html.includes('deltaY'));
+		assert.ok(html.includes('ctrlKey'));
+		assert.ok(html.includes('pinchState'));
+		assert.ok(html.includes('distance'));
+		assert.ok(html.includes('activePointers'));
+		assert.ok(html.includes('touch-action:pan-y'));
 
 		assert.ok(html.includes('sequenceDiagram'));
 		assert.ok(html.includes('Copy Mermaid'));

@@ -94,6 +94,22 @@
 - **Trade-offs**: Webview 固有の CSP と message handling は Integration 層に寄る。
 - **Follow-up**: Webview 以外の表示方法へ変更する場合も Renderer と Analyzer は再利用する。
 
+### Decision: 入力方式は共通の表示状態契約へ集約する
+- **Context**: Requirement 9 はボタンに加えてマウスホイールとトラックパッド／タッチデバイスのピンチズームを求める。既存実装はボタンによる倍率変更と Pointer Events によるパンを持つ。
+- **Alternatives Considered**:
+  1. ボタン、ホイール、ピンチごとに別々の倍率状態を持つ。
+  2. 各入力を同じ `scale` 更新契約へ変換し、パン状態と一元管理する。
+  3. Mermaidを入力ごとに再描画して倍率を反映する。
+- **Selected Approach**: WebView表示層がホイール量とピンチ距離の変化を共通の表示状態更新へ変換する。SVG内部のレイアウトは変更せず、既存の表示ラッパーのtransformを更新する。
+- **Rationale**: ボタン、ホイール、ピンチで倍率境界やリセットの挙動を統一でき、Mermaidテキスト、SourceMap、装飾への影響を避けられる。
+- **Trade-offs**: Pointer Eventsの複数ポインター状態と、通常の縦スクロールとの入力調停が必要になる。OSやWebViewがトラックパッドのピンチを異なるイベントへ変換する可能性もあるため、入力経路ごとの検証が必要である。
+- **Follow-up**: WebView実機検証ではマウス、macOSトラックパッド、タッチ入力を確認し、ピンチ終了後にパンとスクロールが復帰することを確認する。
+
+### Design Synthesis
+- **Generalization**: ボタン、ホイール、ピンチはすべて表示倍率を変更する入力であり、個別のUI状態ではなく共通の表示状態更新へ一般化する。
+- **Build vs. Adopt**: 新規ライブラリは導入せず、WebView標準の Wheel Events と Pointer Events を利用する。既存のMermaid描画や外部ズームライブラリを拡張しない。
+- **Simplification**: 現要件ではズーム中心を完全にポインター位置へ固定する追加状態を導入せず、既存の `translate` / `scale` 契約を維持する。必要になった場合は別要件として再検討する。
+
 ## Risks & Mitigations
 
 - TypeScript AST 解析の範囲が拡大しすぎる — この spec は対象関数内の静的処理フローに限定し、呼び出し先内部の深度解析は行わない。
