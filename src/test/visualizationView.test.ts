@@ -63,6 +63,7 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes('<details class="diagram-fallback">'));
 		assert.ok(html.includes('id="zoom-controls"'));
 		assert.ok(html.includes('id="diagram-viewer" class="diagram-viewer"'));
+		assert.ok(html.includes('id="diagram-canvas" class="diagram-canvas"'));
 		assert.ok(html.includes('id="diagram"'));
 		assert.ok(html.includes('id="zoom-reset"'));
 		assert.ok(html.includes('id="zoom-fit"'));
@@ -88,7 +89,9 @@ suite('VisualizationView', () => {
 		await adapter.show(createVisualizationViewModel(successResult('success')));
 		const html = factory.panel.webview.html;
 		assert.ok(html.includes('const INITIAL_ZOOM=1'));
-		assert.ok(html.includes('const FIT_ZOOM=1'));
+		assert.ok(html.includes('function fitViewer'));
+		assert.ok(html.includes('currentScrollLeft'));
+		assert.ok(html.includes('currentScrollTop'));
 		assert.ok(html.includes('const MIN_ZOOM=0.5'));
 		assert.ok(html.includes('const MAX_ZOOM=3'));
 		assert.ok(html.includes('updateZoomUi'));
@@ -96,7 +99,7 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes('zoom-out'));
 		assert.ok(html.includes('zoom-fit'));
 		assert.ok(html.includes('document.getElementById(\'diagram-viewer\')'));
-		assert.ok(html.includes('viewer.style.setProperty(\'--glitchlens-zoom\''));
+		assert.ok(html.includes('canvas.style.setProperty(\'--glitchlens-zoom\''));
 	});
 
 	test('includes Pointer Events pan state on the Viewer without Mermaid redraw or button capture', async () => {
@@ -104,7 +107,9 @@ suite('VisualizationView', () => {
 		const adapter = new WebviewVisualizationAdapter(factory, new StubClipboard(), new StubNotification());
 		await adapter.show(createVisualizationViewModel(successResult('success')));
 		const html = factory.panel.webview.html;
-		assert.ok(html.includes('currentScale'));
+		assert.ok(html.includes('currentUiScale'));
+		assert.ok(html.includes('currentEffectiveScale'));
+		assert.ok(html.includes('INITIAL_RENDER_SCALE'));
 		assert.ok(html.includes('currentTranslateX'));
 		assert.ok(html.includes('currentTranslateY'));
 		assert.ok(html.includes('pointerdown'));
@@ -134,8 +139,8 @@ suite('VisualizationView', () => {
 		assert.ok(webviewSource.includes('boxMargin: 22'));
 		assert.ok(webviewSource.includes('boxTextMargin: 12'));
 		assert.ok(webviewSource.includes('noteMargin: 20'));
-		assert.ok(webviewSource.includes('useMaxWidth: true'));
-		assert.ok(!webviewSource.includes('useMaxWidth: false'));
+		assert.ok(webviewSource.includes('useMaxWidth: false'));
+		assert.ok(!webviewSource.includes('useMaxWidth: true'));
 		assert.ok(webviewSource.includes('getComputedStyle(document.documentElement)'));
 		assert.ok(webviewSource.includes('let mermaidInitialized = false'));
 		assert.ok(webviewSource.includes('if (!mermaidInitialized)'));
@@ -235,11 +240,14 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes('charge-->>root: return receipt'));
 		assert.ok(html.includes('id="diagram-viewer"'));
 		assert.ok(html.includes('id="diagram"'));
-		assert.match(html, /#diagram-viewer\{[^}]*transform:translate\([^}]*scale\(var\(--glitchlens-zoom,1\)\)/);
-		assert.match(html, /#diagram svg\{[^}]*width:100%[^}]*height:auto/);
-		assert.ok(!html.includes('max-width:none'));
+		assert.match(html, /#diagram-canvas\{[^}]*transform:translate\([^}]*scale\(var\(--glitchlens-zoom,1\)\)/);
+		assert.ok(!html.includes('#diagram-viewer{transform:translate'));
+		assert.match(html, /#diagram svg\{[^}]*width:max-content[^}]*height:auto/);
+		assert.match(html, /#diagram-viewer\{[^}]*overflow:auto/);
+		assert.ok(html.includes('max-width:none'));
 		assert.ok(!html.includes('min-width:100%'));
-		assert.ok(!html.includes('overflow:visible'));
+		assert.ok(html.includes('#diagram-viewer{overflow:auto'));
+		assert.ok(html.includes('width:max-content'));
 		assert.ok(!html.includes('#diagram svg text{font-size:13px!important'));
 		assert.match(html, /#diagram svg \.actor-line\{[^}]*stroke:[^;]+/);
 		assert.match(html, /#diagram svg \.actor\{[^}]*stroke:[^;]+/);
@@ -277,10 +285,10 @@ suite('VisualizationView', () => {
 		await adapter.show(createVisualizationViewModel(successResult('success', { mermaidText })));
 		const html = factory.panel.webview.html;
 
-		for (const id of ['zoom-in', 'zoom-out', 'zoom-reset', 'zoom-fit', 'zoom-level', 'diagram-viewer', 'diagram']) {
+		for (const id of ['zoom-in', 'zoom-out', 'zoom-reset', 'zoom-fit', 'zoom-level', 'diagram-viewer', 'diagram-canvas', 'diagram']) {
 			assert.ok(html.includes(`id="${id}"`));
 		}
-		for (const state of ['currentScale', 'currentTranslateX', 'currentTranslateY', 'setViewerState']) {
+		for (const state of ['currentUiScale', 'currentEffectiveScale', 'initialRenderScale', 'currentTranslateX', 'currentTranslateY', 'setViewerState']) {
 			assert.ok(html.includes(state));
 		}
 		assert.ok(html.includes('const INITIAL_ZOOM=1'));
@@ -301,7 +309,7 @@ suite('VisualizationView', () => {
 		assert.ok(html.includes('pinchState'));
 		assert.ok(html.includes('distance'));
 		assert.ok(html.includes('activePointers'));
-		assert.ok(html.includes('touch-action:pan-y'));
+		assert.ok(html.includes('touch-action:none'));
 
 		assert.ok(html.includes('sequenceDiagram'));
 		assert.ok(html.includes('Copy Mermaid'));

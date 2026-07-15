@@ -110,6 +110,20 @@
 - **Build vs. Adopt**: 新規ライブラリは導入せず、WebView標準の Wheel Events と Pointer Events を利用する。既存のMermaid描画や外部ズームライブラリを拡張しない。
 - **Simplification**: 現要件ではズーム中心を完全にポインター位置へ固定する追加状態を導入せず、既存の `translate` / `scale` 契約を維持する。必要になった場合は別要件として再検討する。
 
+### Display Scale Design Update
+- **Context**: 大規模な関数ではMermaidの自動幅調整により、初期100%でも文字・枠・線が小さく表示される。
+- **Sources Consulted**: `src/integration/webviewMermaid.js`, `src/integration/visualizationView.ts`, `src/test/visualizationView.test.ts`, Mermaid公式Config Schema
+- **Findings**: 現行実装は`sequence.useMaxWidth: true`、SVGの`width:100%`、`transform: scale(1)`を併用している。Mermaid公式仕様では`useMaxWidth: true`は利用可能領域に合わせて図を拡大縮小し、`false`は必要な絶対サイズを使用する。
+- **Implications**: 100%では`useMaxWidth: false`と自然サイズのSVGを使用し、図が大きい場合はスクロールさせる。FitはSVG実寸と表示領域から別途倍率を計算し、100%と混同しない。
+- **Synthesis**: 新しいライブラリは導入せず、SVGの自然サイズ、WebViewのスクロール、既存CSS transform、ブラウザ標準の寸法取得を採用する。Renderer、Common Flow Model、Application contractは変更しない。
+
+### Viewport and Canvas Design Update
+- **Context**: 現行実装ではズーム用`transform`を外側の`#diagram-viewer`へ適用しているため、縮小時にスクロール領域・描画領域自体も縮小される。
+- **Sources Consulted**: `src/integration/visualizationView.ts`, `src/test/visualizationView.test.ts`, 既存のWebView表示状態契約
+- **Findings**: 外側viewportと内側canvasを同一要素で兼ねている。CSS transformは適用要素の視覚的な大きさも変更するため、viewportの固定と内容のズームを同時に満たせない。
+- **Implications**: `#diagram-viewer`を固定viewport、内側ラッパーをcanvasとして分離し、transformはcanvasだけへ適用する。Fitはviewport寸法を基準にcanvas倍率を計算する。
+- **Decision**: UI上の倍率と実効描画倍率を分離する。UI 100%は`uiScale=1`とし、初期見た目の微調整は`INITIAL_RENDER_SCALE`固定係数で管理する。Mermaid text、SourceMap、SVG装飾、Copy Mermaid、コードジャンプは表示状態から独立させる。
+
 ## Risks & Mitigations
 
 - TypeScript AST 解析の範囲が拡大しすぎる — この spec は対象関数内の静的処理フローに限定し、呼び出し先内部の深度解析は行わない。

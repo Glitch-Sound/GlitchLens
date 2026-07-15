@@ -55,7 +55,7 @@ try {
 			boxMargin: 22,
 			boxTextMargin: 12,
 			noteMargin: 20,
-			useMaxWidth: true,
+			useMaxWidth: false,
 		},
 	});
 	mermaidInitialized = true;

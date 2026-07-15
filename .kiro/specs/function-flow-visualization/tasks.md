@@ -71,7 +71,7 @@
   - FlowDiagnostic と RendererWarning はユーザー向け notice に変換され、Renderer contract へ UI 固有型が混ざらない。
   - 完全解析失敗でも Mermaid として表現できる部分結果があれば表示用結果として返る。
   - _Depends: 3.1, 4.1_
-  - _Requirements: 2.1, 4.1, 4.4, 6.2, 6.3, 6.4, 8.4, 8.5_
+  - _Requirements: 2.1, 4.1, 4.5, 6.2, 6.3, 6.4, 8.4, 8.5_
 - [x] 5.2 Analysis cache と無効化を実装する
   - cache key は document URI、document version、function range、configuration digest、analyzer id、analyzer version を含む。
   - document change、configuration change、analyzer version change で古い結果を再利用しない。
@@ -82,7 +82,7 @@
   - supported / unsupported language、target not found、partial success、render failure、cancelled の結果が区別される。
   - analyzer version を変えると cache miss になることを確認する。
   - diagnostics と renderer warnings が user-visible notices に変換されることを確認できる。
-  - _Requirements: 1.3, 1.4, 4.4, 6.2, 6.3, 6.4, 8.1, 8.4, 8.5_
+  - _Requirements: 1.3, 1.4, 4.5, 6.2, 6.3, 6.4, 8.1, 8.4, 8.5_
 
 - [x] 6. VS Code Integration: command、CodeLens、表示、Clipboard を接続する
 - [x] 6.1 CommandController でカーソル起点と CodeLens 起点の実行を扱う
@@ -126,7 +126,7 @@
   - カーソル起点と CodeLens 起点の両方から可視化が開始される。
   - Mermaid 図が VS Code 上に表示され、unknown / unresolved と partial result がユーザーに見える。
   - 表示済み Mermaid text をコピーでき、コピー対象なしの理由も通知される。
-  - _Requirements: 1.1, 1.2, 3.2, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 8.2_
+  - _Requirements: 1.1, 1.2, 3.2, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 8.2_
 
 - [x] 8. Responsiveness and safety validation: 応答性優先の振る舞いを確認する
 - [x] 8.1 大きい関数や複雑な関数で部分結果とキャンセルを検証する
@@ -259,3 +259,79 @@
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10, 9.11, 9.12, 9.13_
 
 - 11.6-11.8: マウスホイールと2本ポインターのピンチを既存の表示倍率状態へ統合し、通常のパン・縦スクロール・fallback・既存表示機能との回帰を統合テストで確認した。
+
+- [x] 12. 表示倍率仕様変更: 100%固定表示、Fit、スクロールを実装する
+- [x] 12.1 100%表示でMermaid SVGの自然サイズを維持する
+  - Mermaid sequence設定の`useMaxWidth`とSVG表示CSSを、表示倍率100%で自動縮小しない構成へ変更する。
+  - SVGの文字、participant枠、制御ブロック枠、線が関数規模によって縮小されず、図の自然サイズを基準に表示される状態にする。
+  - WebView幅を超える図は横方向・縦方向にスクロールでき、既存のMermaid text、SourceMap、SVG装飾、Copy Mermaidへ影響しない。
+  - Observable completion: 小規模と大規模のfixtureを100%で表示したとき、文字・枠・線のCSS上の基準サイズが同じで、大規模図だけがスクロール可能になる。
+  - _Boundary: VisualizationView / Webview Mermaid_
+  - _Requirements: 9.1, 9.2, 9.3, 9.7, 9.8, 9.9, 9.10, 9.13, 9.14_
+
+- [x] 12.2 Fitと100%リセットを表示状態へ統合する
+  - Fit操作でSVGの実寸と表示領域から図全体が収まる倍率を計算し、100%とは別の表示状態として適用する。
+  - Fit後の拡大・縮小は現在倍率を基準に変更し、最小倍率・最大倍率を超えないようにする。
+  - 100%リセットでは倍率を1へ戻し、translateとスクロール位置を初期位置へ戻す。
+  - Observable completion: Fitで大規模図が表示領域へ収まり、手動ズーム後の100%リセットで倍率・パン・スクロールが初期状態へ戻る。
+  - _Depends: 12.1_
+  - _Boundary: Webview Mermaid interaction_
+  - _Requirements: 9.4, 9.5, 9.6, 9.7, 9.8, 9.18_
+
+- [x] 12.3 表示倍率変更の回帰テストを追加する
+  - 小規模・大規模・長いラベルを含むfixtureで、100%の自然サイズ表示と大規模図のスクロールを検証する。
+  - Fit倍率の計算、Fit後の現在倍率基準ズーム、100%リセット時のscrollLeft・scrollTop・translate初期化を検証する。
+  - Copy Mermaid、SourceMap、SVG装飾、fallback、ホイール、ピンチ、通常縦スクロールが表示倍率変更によって壊れないことを検証する。
+  - Observable completion: `visualizationView.test.ts`でRequirement 9.1〜9.18の表示倍率契約と既存表示機能の非干渉が確認できる。
+  - _Depends: 12.2_
+  - _Boundary: VisualizationView tests / Webview Mermaid tests_
+  - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10, 9.11, 9.12, 9.13, 9.14, 9.15, 9.16, 9.17, 9.18_
+
+- [x] 12.4 表示倍率仕様の統合検証と品質ゲートを行う
+  - WebView上で初期100%、大規模図のスクロール、Fit、手動ズーム、100%リセットを通常規模・大規模の図で確認する。
+  - Mermaid text、Copy Mermaid、SourceMap、SVG装飾、fallback、既存のコードジャンプ連携に回帰がないことを確認する。
+  - `npm run check-types`、`npm run lint`、`npm run compile`、`npm run test:unit`、`npm run test:integration`を実行する。
+  - Observable completion: 全品質ゲートが成功し、Requirement 9.1〜9.18に対応する表示確認結果が得られる。
+  - _Depends: 12.3_
+  - _Boundary: Integration validation_
+  - _Requirements: 4.2, 4.3, 5.1, 5.2, 7.2, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10, 9.11, 9.12, 9.13, 9.14, 9.15, 9.16, 9.17, 9.18
+
+## Implementation Notes
+
+- 12.1-12.4: 既存の11.x表示操作タスクを前提に、`useMaxWidth: true`による自動縮小を100%表示から除外し、Fitを明示的な自動縮小操作として追加する。
+
+- [x] 13. 表示viewportと内側canvasを分離し、UI倍率と描画倍率を統合する
+- [x] 13.1 固定viewportと内側canvasの表示構造を実装する
+  - 外側viewportを固定されたスクロールコンテナとして維持し、幅・高さ・スクロール領域を倍率変更やFitで変更しない。
+  - 内側canvasを追加し、ズーム・パンの`transform`をcanvasだけへ適用する。外側viewportにはズームtransformを適用しない。
+  - 100%表示ではMermaidの自然サイズを維持し、viewportを超える図をスクロール可能にする。
+  - Observable completion: 縮小時もviewportの表示領域とスクロールコンテナが縮小せず、canvas内のシーケンス図だけが縮小される。
+  - _Boundary: VisualizationView / Webview Mermaid_
+  - _Requirements: 9.5, 9.6, 9.7, 9.10, 9.11, 9.16, 9.17, 9.22_
+
+- [x] 13.2 UI倍率と初期描画倍率を分離し、Fitとリセットを更新する
+  - UI上の100%を`uiScale=1`として管理し、初期描画には後から調整可能な固定`INITIAL_RENDER_SCALE`係数を適用する。
+  - 実効canvas倍率を初期描画係数とUI倍率から算出し、ユーザーの拡大・縮小はUI倍率を基準に適用する。
+  - Fitは固定viewportとSVG自然サイズからcanvasのUI倍率だけを計算し、100%リセットでは初期係数、倍率、パン、スクロールを初期化する。
+  - Observable completion: UI上100%の初期表示が現在より少し小さく、Fit後の手動ズームと100%リセットが仕様どおり動作する。
+  - _Depends: 13.1_
+  - _Boundary: Webview Mermaid interaction_
+  - _Requirements: 9.1, 9.3, 9.4, 9.8, 9.9, 9.12, 9.13, 9.14, 9.15_
+
+- [x] 13.3 viewport・canvas分離と表示倍率の回帰テストを追加する
+  - 小規模・大規模fixtureで、viewportの幅・高さ・スクロール領域が倍率変更前後で維持されることを検証する。
+  - canvasだけのズーム、UI上100%と内部描画倍率の分離、Fit、現在倍率基準の拡大・縮小、リセット時の状態初期化を検証する。
+  - Mermaid text、SourceMap、SVG装飾、Copy Mermaid、コードジャンプ、fallback、ホイール、ピンチ、通常スクロールの非干渉を検証する。
+  - Observable completion: `visualizationView.test.ts`でRequirement 9.1〜9.22のviewport・canvas表示契約と既存機能の回帰が確認できる。
+  - _Depends: 13.2_
+  - _Boundary: VisualizationView tests / Webview Mermaid tests_
+  - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10, 9.11, 9.12, 9.13, 9.14, 9.15, 9.16, 9.17, 9.18, 9.19, 9.20, 9.21, 9.22_
+
+- [x] 13.4 表示viewport分離の統合検証と品質ゲートを行う
+  - WebView上で初期UI 100%、現在より少し小さい表示、固定viewport、大規模図のスクロール、canvasのみの縮小、Fit、リセットを確認する。
+  - Mermaid text、Copy Mermaid、SourceMap、SVG装飾、コードジャンプ、fallbackに回帰がないことを確認する。
+  - `npm run check-types`、`npm run lint`、`npm run compile`、`npm run test:unit`、`npm run test:integration`を実行する。
+  - Observable completion: 全品質ゲートが成功し、Requirement 9.1〜9.22の表示確認結果が得られる。
+  - _Depends: 13.3_
+  - _Boundary: Integration validation_
+  - _Requirements: 4.2, 4.3, 5.1, 5.2, 7.2, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 9.10, 9.11, 9.12, 9.13, 9.14, 9.15, 9.16, 9.17, 9.18, 9.19, 9.20, 9.21, 9.22_
