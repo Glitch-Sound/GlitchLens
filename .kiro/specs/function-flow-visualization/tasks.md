@@ -389,3 +389,29 @@
   - _Requirements: 4.2, 5.1, 5.2, 9.23_
   - _Boundary: Integration validation_
   - _Depends: 15.2_
+
+- [ ] 16. 条件ラベルの視認性を改善する
+- [x] 16.1 条件ラベルの色と位置を枠線に合わせて調整する
+  - 任意のフラグメント種別と条件文言について、条件ラベルを対応するフラグメント種別ラベル・制御ブロック枠線と同じ色で表示する。
+  - Mermaid描画後のSVG装飾でラベル要素だけを対象にし、枠線・枠範囲・条件文言・メッセージ間隔・Mermaid textを変更しない。
+  - ラベルの表示用`transform`だけを調整し、対応する枠の上部に近づけて表示する。Mermaidの`x`、`y`、`textLength`、`lengthAdjust`、font-sizeは変更しない。
+  - Observable completion: 複数のフラグメント種別と異なる条件文言で、条件ラベルが対応する枠線色で表示され、枠上部に近い位置へ移動していることを確認できる。
+  - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
+  - _Boundary: webviewMermaid.js_
+
+- [x] 16.2 条件ラベル装飾の回帰テストを追加する
+  - 複数のフラグメント種別と、関数ごとに異なる条件文言を含むfixtureで、条件ラベルの文字色が対応する種別ラベル・枠線の色と一致することを検証する。
+  - ラベルの表示用変換が上方配置として適用され、枠範囲、条件文言、メッセージ間隔、Mermaid text、既存のSVG装飾へ影響しないことを検証する。
+  - Observable completion: `visualizationView.test.ts` で Requirement 11.1〜11.5 の色対応、位置、非干渉契約が確認できる。
+  - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
+  - _Boundary: VisualizationView tests / Webview Mermaid tests_
+  - _Depends: 16.1_
+
+- [ ] 16.3 条件ラベル改善の統合検証と品質ゲートを行う
+  - Dark / Lightテーマ、関数ごとに異なる長い条件文、ネストした制御ブロックを含む図でラベルと枠線の対応および上部配置を確認する。
+  - Mermaid text、Copy Mermaid、SourceMap、fallback、メッセージラベル位置調整に回帰がないことを確認する。
+  - `npm run check-types`、`npm run lint`、`npm run compile`、`npm run test:unit`、`npm run test:integration`を実行する。
+  - Observable completion: Requirement 11.1〜11.5 の表示確認と全品質ゲートが成功する。
+  - _Requirements: 4.2, 4.3, 5.1, 5.2, 9.23, 11.1, 11.2, 11.3, 11.4, 11.5_
+  - _Boundary: Integration validation_
+  - _Depends: 16.2_

@@ -215,13 +215,10 @@ const CONTROL_COLOR_BY_KEYWORD = {
 	option: '#fbcfe8',
 };
 
-// Visual tuning knobs for Mermaid's control-label boxes.
-const CONTROL_STROKE_WIDTH = 1.8;
-const CONTROL_LABEL_FONT_SIZE = 14;
 const GLITCHLENS_MESSAGE_LABEL_OFFSET_Y = 20;
 
 function decorateSequenceControls(diagram) {
-	for (const text of diagram.querySelectorAll('svg text')) {
+	for (const text of diagram.querySelectorAll('svg text.labelText')) {
 		const keyword = readControlKeyword(text.textContent);
 		if (!keyword) {
 			continue;
@@ -230,18 +227,48 @@ function decorateSequenceControls(diagram) {
 		const className = CONTROL_CLASS_BY_KEYWORD[keyword];
 		const color = CONTROL_COLOR_BY_KEYWORD[keyword];
 		group?.classList.add(className);
-		text.classList.add(className);
-		text.style.setProperty('fill', color, 'important');
-		text.style.setProperty('font-size', `${CONTROL_LABEL_FONT_SIZE}px`, 'important');
-		text.style.setProperty('font-size', '14px', 'important');
-		for (const shape of group?.querySelectorAll('rect,path,line,polygon') ?? []) {
+		styleControlFragmentTypeLabel(text, className, color);
+		for (const shape of findOwnControlShapes(group)) {
 			shape.classList.add(className);
-			shape.style.setProperty('stroke', color, 'important');
-			shape.style.setProperty('fill', '#202732', 'important');
-			shape.style.setProperty('stroke-width', `${CONTROL_STROKE_WIDTH}px`, 'important');
-			shape.style.setProperty('stroke-dasharray', 'none', 'important');
+			shape.setAttribute('stroke', color);
+			shape.setAttribute('fill', '#202732');
+			shape.setAttribute('stroke-width', '1.8');
+			shape.setAttribute('stroke-dasharray', 'none');
 		}
 	}
+	for (const conditionLabel of diagram.querySelectorAll('svg text.loopText, svg text.sectionTitle')) {
+		const group = findControlGroup(conditionLabel);
+		const fragmentTypeLabel = findFragmentTypeLabel(group);
+		const keyword = readControlKeyword(fragmentTypeLabel?.textContent);
+		if (!keyword) {
+			continue;
+		}
+		styleControlConditionLabel(conditionLabel, CONTROL_CLASS_BY_KEYWORD[keyword], CONTROL_COLOR_BY_KEYWORD[keyword]);
+	}
+}
+
+function findOwnControlShapes(group) {
+	if (!group) {
+		return [];
+	}
+	return [...group.querySelectorAll('rect,path,line,polygon')].filter((shape) => findControlGroup(shape) === group);
+}
+
+function findFragmentTypeLabel(group) {
+	if (!group) {
+		return undefined;
+	}
+	return [...group.querySelectorAll('text.labelText')].find((label) => findControlGroup(label) === group);
+}
+
+function styleControlFragmentTypeLabel(text, className, color) {
+	text.classList.add(className);
+	text.setAttribute('fill', color);
+}
+
+function styleControlConditionLabel(text, className, color) {
+	text.classList.add(className);
+	text.setAttribute('fill', color);
 }
 
 function decorateSequenceParticipants(diagram) {
@@ -249,7 +276,7 @@ function decorateSequenceParticipants(diagram) {
 	for (const text of diagram.querySelectorAll('svg text')) {
 		const label = text.textContent?.trim();
 		if (label === 'root' || (rootName && label === rootName)) {
-			findControlGroup(text)?.classList.add('glitchlens-root-participant');
+			findSvgGroup(text)?.classList.add('glitchlens-root-participant');
 		}
 	}
 }
@@ -275,7 +302,7 @@ function decorateSequenceMessages(diagram) {
 		if (!label) {
 			continue;
 		}
-		const group = findControlGroup(text);
+		const group = findSvgGroup(text);
 		if (label.startsWith('return')) {
 			group?.classList.add('glitchlens-return-message');
 		} else if (label.startsWith('await ') || label.includes(': await ') || label.includes(' await ')) {
@@ -290,24 +317,20 @@ function readControlKeyword(value) {
 }
 
 function findControlGroup(text) {
-	let current = text.closest('g');
-	for (let depth = 0; current && depth < 4; depth += 1) {
-		if (current.querySelector('rect,path,line,polygon')) {
-			return current;
-		}
-		current = current.parentElement?.closest('g');
-	}
-	return text.closest('svg');
+	return text.closest('g[data-et="control-structure"]');
+}
+
+function findSvgGroup(text) {
+	return text.closest('g') ?? text.closest('svg');
 }
 
 function addNonceToSvgStyles(svg, nonce) {
-	if (!nonce) {
-		return svg;
-	}
 	const template = document.createElement('template');
 	template.innerHTML = svg;
 	for (const style of template.content.querySelectorAll('style')) {
-		style.setAttribute('nonce', nonce);
+		if (nonce) {
+			style.setAttribute('nonce', nonce);
+		}
 	}
 	return template.innerHTML;
 }

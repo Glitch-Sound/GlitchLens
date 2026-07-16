@@ -16,7 +16,7 @@
   "homepage": "https://github.com/Glitch-Sound/GlitchLens",
   "bugs": {
     "url": "https://github.com/Glitch-Sound/GlitchLens/issues"
-},
+  },
   "categories": [
     "Programming Languages",
     "Other"
@@ -95,6 +95,7 @@
     "test": "vscode-test"
   },
   "devDependencies": {
+    "@types/jsdom": "^28.0.3",
     "@types/mocha": "^10.0.10",
     "@types/node": "24.x",
     "@types/vscode": "^1.125.0",
@@ -102,6 +103,7 @@
     "@vscode/test-electron": "^3.0.0",
     "esbuild": "^0.28.1",
     "eslint": "^10.5.0",
+    "jsdom": "^29.1.1",
     "npm-run-all": "^4.1.5",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1"

@@ -282,6 +282,17 @@ function renderHtml(model: VisualizationViewModel, nonce: string, viewId: string
 		'.glitchlens-await-message text{fill:#a5f3fc!important;font-weight:600!important;}',
 		'.glitchlens-return-message :is(path,line,polygon,marker path){stroke:#8b949e!important;fill:#8b949e!important;opacity:0.75!important;}',
 		'.glitchlens-return-message text{fill:#aeb6c2!important;font-style:italic!important;}',
+		'#diagram svg text.glitchlens-control-loop,#diagram svg text.glitchlens-control-loop tspan{fill:#9fd0ff!important;}',
+		'#diagram svg .glitchlens-control-loop:is(rect,path,line,polygon){stroke:#9fd0ff!important;fill:#202732!important;stroke-width:1.8px!important;stroke-dasharray:none!important;}',
+		'#diagram svg text.glitchlens-control-alt,#diagram svg text.glitchlens-control-alt tspan{fill:#8ff2ff!important;}',
+		'#diagram svg .glitchlens-control-alt:is(rect,path,line,polygon){stroke:#8ff2ff!important;fill:#202732!important;stroke-width:1.8px!important;stroke-dasharray:none!important;}',
+		'#diagram svg text.glitchlens-control-opt,#diagram svg text.glitchlens-control-opt tspan{fill:#fde68a!important;}',
+		'#diagram svg .glitchlens-control-opt:is(rect,path,line,polygon){stroke:#fde68a!important;fill:#202732!important;stroke-width:1.8px!important;stroke-dasharray:none!important;}',
+		'#diagram svg text.glitchlens-control-critical,#diagram svg text.glitchlens-control-critical tspan{fill:#ddd6fe!important;}',
+		'#diagram svg .glitchlens-control-critical:is(rect,path,line,polygon){stroke:#ddd6fe!important;fill:#202732!important;stroke-width:1.8px!important;stroke-dasharray:none!important;}',
+		'#diagram svg text.glitchlens-control-option,#diagram svg text.glitchlens-control-option tspan{fill:#fbcfe8!important;}',
+		'#diagram svg .glitchlens-control-option:is(rect,path,line,polygon){stroke:#fbcfe8!important;fill:#202732!important;stroke-width:1.8px!important;stroke-dasharray:none!important;}',
+		'#diagram svg text.loopText[class*="glitchlens-control-"],#diagram svg text.sectionTitle[class*="glitchlens-control-"]{transform:translateY(-18px)!important;}',
 	].join('');
 	return [
 		'<!DOCTYPE html>',

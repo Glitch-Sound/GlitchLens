@@ -1,6 +1,8 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
+import { build } from 'esbuild';
+import { JSDOM } from 'jsdom';
 
 import {
 	ClipboardAdapter,
@@ -186,13 +188,16 @@ suite('VisualizationView', () => {
 		assert.ok(webviewSource.includes('readRootParticipantId(lines)'));
 		assert.ok(webviewSource.includes('shape.classList.add(className)'));
 		assert.ok(webviewSource.includes('text.classList.add(className)'));
-		assert.ok(webviewSource.includes("shape.style.setProperty('stroke', color, 'important')"));
-		assert.ok(webviewSource.includes('const CONTROL_STROKE_WIDTH = 1.8'));
-		assert.ok(webviewSource.includes('const CONTROL_LABEL_FONT_SIZE = 14'));
+		assert.ok(webviewSource.includes("shape.setAttribute('stroke', color)"));
+		assert.ok(webviewSource.includes("svg text.labelText"));
+		assert.ok(webviewSource.includes("svg text.loopText, svg text.sectionTitle"));
+		assert.ok(webviewSource.includes("g[data-et=\"control-structure\"]"));
+		assert.ok(webviewSource.includes('styleControlConditionLabel(conditionLabel'));
+		assert.ok(webviewSource.includes("text.setAttribute('fill', color)"));
+		assert.ok(webviewSource.includes('styleControlFragmentTypeLabel(text, className, color)'));
+		assert.ok(!webviewSource.includes('styleControlLabel(text, className, color)'));
 		assert.ok(!webviewSource.includes('CONTROL_LABEL_BOX_EXTRA_WIDTH'));
-		assert.ok(webviewSource.includes('`${CONTROL_STROKE_WIDTH}px`'));
-		assert.ok(webviewSource.includes('`${CONTROL_LABEL_FONT_SIZE}px`'));
-		assert.ok(webviewSource.includes("shape.style.setProperty('stroke-dasharray', 'none', 'important')"));
+		assert.ok(webviewSource.includes("shape.setAttribute('stroke-dasharray', 'none')"));
 		assert.ok(webviewSource.includes('activate ${rootParticipantId}'));
 		assert.ok(webviewSource.includes('deactivate ${rootParticipantId}'));
 		assert.ok(webviewSource.includes('activate ${message.to}'));
@@ -220,7 +225,12 @@ suite('VisualizationView', () => {
 		assert.ok(webviewSource.includes('glitchlens-control-opt'));
 		assert.ok(webviewSource.includes('glitchlens-control-critical'));
 		assert.ok(webviewSource.includes('glitchlens-control-option'));
-		assert.ok(webviewSource.includes("text.closest('g')"));
+		assert.ok(!webviewSource.includes("text.style.setProperty('fill', color, 'important')"));
+		assert.ok(!webviewSource.includes("shape.style.setProperty('stroke', color, 'important')"));
+		assert.ok(viewSource.includes('#diagram svg text.glitchlens-control-loop'));
+		assert.ok(viewSource.includes('#diagram svg text.loopText[class*="glitchlens-control-"]'));
+		assert.ok(viewSource.includes('transform:translateY(-18px)!important'));
+		assert.ok(webviewSource.includes("closest('g[data-et=\"control-structure\"]')"));
 		assert.ok(webviewSource.includes('addNonceToSvgStyles'));
 		assert.ok(webviewSource.includes("style.setAttribute('nonce', nonce)"));
 		assert.ok(webviewSource.includes('showFallback(diagram, mermaidText)'));
@@ -364,12 +374,66 @@ suite('VisualizationView', () => {
 		]) {
 			assert.ok(webviewSource.includes(className));
 		}
+		assert.ok(viewSource.includes('#diagram svg text.glitchlens-control-loop'));
+		assert.ok(viewSource.includes('#diagram svg text.loopText[class*="glitchlens-control-"]'));
+		assert.ok(!webviewSource.includes("text.style.setProperty('fill', color, 'important')"));
+		assert.ok(!webviewSource.includes("shape.style.setProperty('stroke', color, 'important')"));
 		assert.ok(webviewSource.includes('activate ${rootParticipantId}'));
 		assert.ok(webviewSource.includes('activate ${message.to}'));
 		assert.ok(webviewSource.includes('mermaid.render'));
 		assert.ok(webviewSource.includes('showFallback(diagram, mermaidText)'));
 		assert.ok(viewSource.includes('readWebviewMermaidScript'));
 		assert.ok(!viewSource.includes('mermaid.render'));
+	});
+
+	test('decorates nested control-condition labels using their own Mermaid control-structure group', async () => {
+		const mermaidText = [
+			'sequenceDiagram',
+			'participant root as processOrders',
+			'participant push as push',
+			'participant error as error',
+			'loop pending orders',
+			'critical retry transaction',
+			'opt amount is not positive',
+			'root->>push: push',
+			'end',
+			'option recover from failure',
+			'root->>error: error',
+			'end',
+			'end',
+			'',
+		].join('\n');
+		const { window, diagram } = await renderWebviewMermaidFixture(mermaidText);
+		const conditionLabels = [...diagram.querySelectorAll<SVGTextElement>('text.loopText, text.sectionTitle')];
+
+		assert.ok(conditionLabels.length >= 4, 'Mermaid must render all nested condition-label segments');
+		const observedFragmentTypes = new Set<string>();
+		for (const conditionLabel of conditionLabels) {
+			const group = conditionLabel.closest('g[data-et="control-structure"]');
+			assert.ok(group, 'each condition label must resolve to a Mermaid control-structure group');
+			const typeLabel = findOwnFragmentTypeLabel(group);
+			assert.ok(typeLabel, 'each condition label group must contain its own fragment type label');
+			assert.ok(typeLabel.className.baseVal.includes('glitchlens-control-'));
+			assert.ok(conditionLabel.className.baseVal.includes('glitchlens-control-'));
+			const expectedColor = window.getComputedStyle(typeLabel).fill;
+			const ownFrame = findOwnControlFrame(group);
+			assert.ok(expectedColor, 'fragment type label must have its color decoration');
+			assert.ok(ownFrame, 'fragment group must have its own frame shape');
+			assert.strictEqual(window.getComputedStyle(conditionLabel).fill, expectedColor);
+			assert.strictEqual(window.getComputedStyle(ownFrame).stroke, expectedColor);
+			assert.strictEqual(window.getComputedStyle(conditionLabel).transform, 'translateY(-18px)');
+			assert.strictEqual(window.getComputedStyle(typeLabel).transform, 'none');
+			observedFragmentTypes.add(typeLabel.textContent?.trim() ?? '');
+		}
+
+		assert.deepStrictEqual([...observedFragmentTypes].sort(), ['critical', 'loop', 'opt']);
+		assert.ok(conditionLabels.some(label => label.classList.contains('sectionTitle') && fragmentTypeOf(label) === 'critical'));
+		const loopCondition = conditionLabels.find(label => fragmentTypeOf(label) === 'loop');
+		const optCondition = conditionLabels.find(label => fragmentTypeOf(label) === 'opt');
+		assert.ok(loopCondition && optCondition);
+		assert.notStrictEqual(window.getComputedStyle(loopCondition).fill, window.getComputedStyle(optCondition).fill, 'outer fragment color must not overwrite nested fragment labels');
+
+		window.close();
 	});
 
 	test('reuses the same panel and replaces stale content safely', async () => {
@@ -596,6 +660,98 @@ suite('VisualizationView', () => {
 		assert.ok(!upstreamSource.join('\n').includes('Clipboard'));
 	});
 });
+
+async function renderWebviewMermaidFixture(mermaidText: string) {
+	const bundle = await build({
+		entryPoints: [path.resolve(__dirname, '../../src/integration/webviewMermaid.js')],
+		bundle: true,
+		format: 'iife',
+		platform: 'browser',
+		write: false,
+	});
+	const dom = new JSDOM('<!doctype html><html><body><div id="diagram"></div></body></html>', {
+		runScripts: 'dangerously',
+		url: 'https://glitchlens.test/',
+	});
+	const { window } = dom;
+	installControlDecorationStyles(window.document);
+	Object.defineProperty(window.SVGElement.prototype, 'getBBox', {
+		value: function getBBox() {
+			return { x: 0, y: 0, width: Math.max(1, this.textContent?.length ?? 0) * 8, height: 16 };
+		},
+	});
+	Object.assign(window, {
+		GLITCHLENS_VIEW_MODEL: {
+			renderMode: 'mermaid',
+			mermaidText,
+			fallbackText: mermaidText,
+			cspNonce: 'test-nonce',
+			rootFunctionName: 'processOrders',
+		},
+	});
+	const nodeGlobals = globalThis as typeof globalThis & Record<string, unknown>;
+	const previousGlobals = new Map<string, unknown>([
+		['window', nodeGlobals.window],
+		['document', nodeGlobals.document],
+		['getComputedStyle', nodeGlobals.getComputedStyle],
+		['CSSStyleSheet', nodeGlobals.CSSStyleSheet],
+		['SVGElement', nodeGlobals.SVGElement],
+		['GLITCHLENS_VIEW_MODEL', nodeGlobals.GLITCHLENS_VIEW_MODEL],
+	]);
+	Object.assign(nodeGlobals, {
+		window,
+		document: window.document,
+		getComputedStyle: window.getComputedStyle.bind(window),
+		CSSStyleSheet: window.CSSStyleSheet,
+		SVGElement: window.SVGElement,
+		GLITCHLENS_VIEW_MODEL: window.GLITCHLENS_VIEW_MODEL,
+	});
+	try {
+		window.eval(bundle.outputFiles[0].text);
+		for (let attempt = 0; attempt < 50 && window.document.body.dataset.render !== 'mermaid'; attempt += 1) {
+			await new Promise<void>(resolve => setTimeout(resolve, 10));
+		}
+	} finally {
+		for (const [name, value] of previousGlobals) {
+			nodeGlobals[name] = value;
+		}
+	}
+	assert.strictEqual(window.document.body.dataset.render, 'mermaid');
+	const diagram = window.document.getElementById('diagram');
+	assert.ok(diagram);
+	return { window, diagram };
+}
+
+function installControlDecorationStyles(document: Document): void {
+	const style = document.createElement('style');
+	style.textContent = [
+		'#diagram svg text.glitchlens-control-loop,#diagram svg text.glitchlens-control-loop tspan{fill:#9fd0ff!important;}',
+		'#diagram svg .glitchlens-control-loop:is(rect,path,line,polygon){stroke:#9fd0ff!important;}',
+		'#diagram svg text.glitchlens-control-alt,#diagram svg text.glitchlens-control-alt tspan{fill:#8ff2ff!important;}',
+		'#diagram svg .glitchlens-control-alt:is(rect,path,line,polygon){stroke:#8ff2ff!important;}',
+		'#diagram svg text.glitchlens-control-opt,#diagram svg text.glitchlens-control-opt tspan{fill:#fde68a!important;}',
+		'#diagram svg .glitchlens-control-opt:is(rect,path,line,polygon){stroke:#fde68a!important;}',
+		'#diagram svg text.glitchlens-control-critical,#diagram svg text.glitchlens-control-critical tspan{fill:#ddd6fe!important;}',
+		'#diagram svg .glitchlens-control-critical:is(rect,path,line,polygon){stroke:#ddd6fe!important;}',
+		'#diagram svg text.glitchlens-control-option,#diagram svg text.glitchlens-control-option tspan{fill:#fbcfe8!important;}',
+		'#diagram svg .glitchlens-control-option:is(rect,path,line,polygon){stroke:#fbcfe8!important;}',
+		'#diagram svg text.loopText[class*="glitchlens-control-"],#diagram svg text.sectionTitle[class*="glitchlens-control-"]{transform:translateY(-18px)!important;}',
+	].join('');
+	document.head.append(style);
+}
+
+function findOwnFragmentTypeLabel(group: Element): SVGTextElement | undefined {
+	return [...group.querySelectorAll<SVGTextElement>('text.labelText')].find(label => label.closest('g[data-et="control-structure"]') === group);
+}
+
+function findOwnControlFrame(group: Element): SVGElement | undefined {
+	return [...group.querySelectorAll<SVGElement>('rect,path,line,polygon')].find(shape => shape.closest('g[data-et="control-structure"]') === group);
+}
+
+function fragmentTypeOf(conditionLabel: SVGTextElement): string | undefined {
+	const group = conditionLabel.closest('g[data-et="control-structure"]');
+	return group ? findOwnFragmentTypeLabel(group)?.textContent?.trim() : undefined;
+}
 
 class StubPanelFactory implements WebviewPanelFactory {
 	public readonly options = { enableScripts: false, localResourceRoots: ['not-set'] as readonly string[] };

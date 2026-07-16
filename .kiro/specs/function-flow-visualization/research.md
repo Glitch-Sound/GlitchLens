@@ -161,6 +161,14 @@
 - Copy Mermaid はプライマリボタン色を避け、`--vscode-button-secondaryBackground` と `--vscode-textLink-foreground` を利用し、濃い青系フォールバックを設定する。
 - 右端配置用の自動マージンは使用せず、既存のDOM ID、ズームイベント、Copy Mermaidメッセージ契約は維持する。
 
+### 条件ラベル視認性の設計更新
+
+- **Context**: Requirement 11 は `loop`、`alt`、`opt`、`critical`、`option` の条件ラベルと枠線の対応を読み取りやすくする。
+- **Finding**: 既存の `decorateSequenceControls` が制御ブロックのキーワード、枠線色、ラベル要素を同じ処理で識別しているため、既存の装飾境界で色と表示位置を一貫して変更できる。
+- **Decision**: 条件ラベルの `fill` は対応する `CONTROL_COLOR_BY_KEYWORD` と同じ値を使用する。位置はラベル要素の表示用 `transform` のみを変更し、Mermaid の `x`、`y`、`textLength`、`lengthAdjust`、枠範囲、メッセージ間隔は変更しない。
+- **Build vs. Adopt**: 新規ライブラリやMermaid設定の追加は不要で、既存のSVG後処理とCSS/SVG標準の表示変換を利用する。
+- **Risk**: MermaidのバージョンやSVGグループ構造により対象要素の親子関係が変わる可能性があるため、5種類の条件を含むfixtureでラベル要素と対応枠の両方を検証する。
+
 ## Risks & Mitigations
 
 - TypeScript AST 解析の範囲が拡大しすぎる — この spec は対象関数内の静的処理フローに限定し、呼び出し先内部の深度解析は行わない。
