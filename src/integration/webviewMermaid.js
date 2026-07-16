@@ -218,6 +218,7 @@ const CONTROL_COLOR_BY_KEYWORD = {
 // Visual tuning knobs for Mermaid's control-label boxes.
 const CONTROL_STROKE_WIDTH = 1.8;
 const CONTROL_LABEL_FONT_SIZE = 14;
+const GLITCHLENS_MESSAGE_LABEL_OFFSET_Y = 20;
 
 function decorateSequenceControls(diagram) {
 	for (const text of diagram.querySelectorAll('svg text')) {
@@ -265,6 +266,10 @@ function centerParticipantLabels(diagram) {
 }
 
 function decorateSequenceMessages(diagram) {
+	for (const text of diagram.querySelectorAll('svg text.messageText')) {
+		text.style.setProperty('transform', `translateY(${GLITCHLENS_MESSAGE_LABEL_OFFSET_Y}px)`, 'important');
+		text.classList.add('glitchlens-message-label');
+	}
 	for (const text of diagram.querySelectorAll('svg text')) {
 		const label = text.textContent?.trim().toLowerCase() ?? '';
 		if (!label) {

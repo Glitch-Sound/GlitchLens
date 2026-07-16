@@ -31,6 +31,17 @@
 
 ## Research Log
 
+### メッセージラベル位置調整
+- **Context**: Requirement 9.23 の追加に伴い、メッセージ間隔を変えずにラベルと線の距離だけを縮める方法を確認した。
+- **Sources Consulted**: `src/integration/webviewMermaid.js`, `src/integration/visualizationView.ts`、既存の Mermaid sequence 設定および SVG 装飾処理。
+- **Findings**:
+  - Mermaid の `messageMargin` はメッセージ間の縦方向の間隔を制御するため、ラベルと線の局所的な距離調整には使用しない。
+  - 既存の Webview は Mermaid 描画後に SVG text へ装飾を適用しており、同じ層でメッセージラベルだけを調整できる。
+  - Mermaid の `x`、`y`、`textLength`、`lengthAdjust` を書き換えるとレイアウト計算や長いラベルに影響するため、表示用 `transform` に限定する。
+- **Implications**:
+  - `webviewMermaid.js` のメッセージ装飾処理に、ラベル text の `translateY`（初期値 20px）を追加する。
+  - Mermaid text、SourceMap、線、activation、participant、メッセージ間隔は変更しない。
+
 ### 既存コードと統合点
 - **Context**: Function Flow Visualization は既存 VS Code extension への大きな機能追加であり、既存実装の影響範囲を確認した。
 - **Sources Consulted**: `package.json`, `src/extension.ts`, `tsconfig.json`, `src/test/extension.test.ts`

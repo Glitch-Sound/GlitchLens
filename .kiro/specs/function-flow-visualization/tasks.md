@@ -365,3 +365,27 @@
   - _Requirements: 4.2, 5.1, 5.2, 6.2, 6.4, 8.5, 9.1, 9.7, 9.8, 9.9, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 10.10_
   - _Boundary: VisualizationView tests / Integration validation_
   - _Depends: 14.3_
+
+- [x] 15. メッセージラベルと線の距離を調整する
+- [x] 15.1 メッセージ間隔を維持したままラベル位置を下げる
+  - Mermaid描画後のSVGでメッセージラベルの`text`要素だけを識別し、表示用の`translateY`（初期値8px）を適用する。
+  - Mermaidの`messageMargin: 70`、線、矢印、activation、participant、control block、および`x`/`y`/`textLength`/`lengthAdjust`/font-sizeは変更しない。
+  - Observable completion: メッセージ間の縦方向の間隔を維持したまま、ラベルが対応する線へ近づいて表示される。
+  - _Requirements: 9.23_
+  - _Boundary: webviewMermaid.js_
+
+- [x] 15.2 メッセージラベル位置調整の回帰テストを追加する
+  - 通常のCall、Await、Returnを含むシーケンス図で、ラベルだけに位置調整が適用されることを検証する。
+  - メッセージ間隔、線・矢印、activation、participant、control block、Mermaid text、SourceMap、既存のSVG装飾が変更されないことを検証する。
+  - Observable completion: Requirement 9.23 の位置調整と非干渉条件がテストまたは表示検証で確認できる。
+  - _Requirements: 4.2, 4.3, 9.23_
+  - _Boundary: VisualizationView tests / Webview Mermaid tests_
+  - _Depends: 15.1_
+
+- [x] 15.3 メッセージラベル位置調整の統合検証と品質ゲートを行う
+  - Dark / Lightテーマ、長いラベル、複数メッセージ、Await / Returnを含む図でラベルの読みやすさを確認する。
+  - `npm run check-types`、`npm run lint`、`npm run compile`、`npm run test:unit`、`npm run test:integration`を実行する。
+  - Observable completion: Requirement 9.23 の表示確認と全品質ゲートが成功し、既存のMermaid表示機能に回帰がない。
+  - _Requirements: 4.2, 5.1, 5.2, 9.23_
+  - _Boundary: Integration validation_
+  - _Depends: 15.2_

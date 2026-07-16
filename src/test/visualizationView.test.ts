@@ -208,6 +208,9 @@ suite('VisualizationView', () => {
 		assert.ok(!webviewSource.match(/svg text[^\n]*font-size/));
 		assert.ok(webviewSource.includes('decorateSequenceParticipants(diagram)'));
 		assert.ok(webviewSource.includes('decorateSequenceMessages(diagram)'));
+		assert.ok(webviewSource.includes("querySelectorAll('svg text.messageText')"));
+		assert.ok(webviewSource.includes('GLITCHLENS_MESSAGE_LABEL_OFFSET_Y'));
+		assert.ok(webviewSource.includes("style.setProperty('transform'"));
 		assert.ok(webviewSource.includes('decorateSequenceControls(diagram)'));
 		assert.ok(webviewSource.includes('glitchlens-root-participant'));
 		assert.ok(webviewSource.includes('glitchlens-await-message'));
