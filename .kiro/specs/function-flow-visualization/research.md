@@ -215,3 +215,50 @@
 - [VS Code Webview Guide](https://code.visualstudio.com/api/extension-guides/webview) — Webview、localResourceRoots、CSP の設計確認
 - [VS Code Workspace Trust Guide](https://code.visualstudio.com/api/extension-guides/workspace-trust) — Restricted Mode と trust gating の設計確認
 - [TypeScript Compiler API](https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API) — SourceFile、Program、AST traversal の解析基盤確認
+
+---
+
+## Requirement 13: メッセージラベル簡潔化の設計調査
+
+### Summary
+
+- 現在の `MermaidRenderer.renderReturn` は `return ${node.expression}` をそのまま Mermaid message にしているため、オブジェクトリテラルを含む return 式が長大なラベルになる。
+- `renderCall` は callee 名中心のラベルを既に生成しているため、主な改善対象は return / throw の式要約である。
+- `RenderResult.mermaidText` は WebView 表示と Clipboard コピーの双方で利用されるため、Rendererで一度だけ要約すれば両者の内容を一致させられる。
+- `sourceMap` は Mermaid 行番号と node / edge を保持しており、ラベル文字列だけを変更してもコード対応を維持できる。
+
+### Research Log
+
+#### Existing Renderer and Integration Contract
+
+- **Sources Consulted**: `src/renderer/mermaidRenderer.ts`, `src/renderer/index.ts`, `src/application/visualizeFunctionFlow.ts`, `src/integration/visualizationView.ts`, `src/test/mermaidRenderer.test.ts`, `src/test/visualizationView.test.ts`
+- **Findings**:
+  - Return node は `node.expression` を直接文字列化して Mermaid の return message に渡している。
+  - Call node は `calleeName`、`await`、resolution suffix を使っており、引数の詳細を含めていない。
+  - `mermaidText` は `VisualizationSuccessResult`、`VisualizationViewModel`、`currentMermaidText` を経由して表示・コピーされる。
+  - SourceMap はラベル内容ではなく Mermaid 行番号、nodeId、edgeId、sourceLocation でコード対応を表現する。
+- **Implications**:
+  - WebView後処理ではなく Rendererのメッセージ生成時に要約する。
+  - Common Flow Model、SourceMap、Clipboard adapter の契約変更は不要である。
+
+#### Design Decision: Renderer-local Formatter
+
+- **Alternatives Considered**:
+  1. WebView SVGの文字列を描画後に切り詰める。
+  2. Analyzerが解析時に短い表示ラベルをFlowNodeへ格納する。
+  3. Renderer内部の純粋なFormatterでMermaid messageを生成する。
+- **Selected Approach**: 3を採用する。
+- **Rationale**: 表示とコピーの一致、Analyzerと表示責務の分離、SourceMap行の安定性を同時に満たせる。WebViewやAnalyzerに表示固有の責務を追加しない。
+- **Trade-offs**: Rendererは文字列ベースの安全な要約に限定され、全てのTypeScript構文を意味解析する責務は持たない。
+
+#### Design Synthesis
+
+- **Generalization**: 長大なラベル対策は `return` 固有ではなく、Call / Return / Throw に共通する `MessageLabelFormatter` と表示上限ポリシーへ一般化する。ただし現在の実装範囲ではこの3種類だけを対象とする。
+- **Build vs. Adopt**: 新規ライブラリやMermaid拡張は導入せず、標準TypeScriptの文字列処理と既存Rendererを拡張する。
+- **Simplification**: participant名、FlowModel、SourceMap、WebView表示状態を変更せず、Renderer内部の一つの整形境界だけを追加する。
+
+### Risks and Mitigations
+
+- 式の構文を誤って意味要約するリスク — 呼び出し先の安全な抽出に失敗した場合は空白正規化と長さ制限へフォールバックし、意味の推測を行わない。
+- 同一ラベルの呼び出しを識別しづらくなるリスク — 連番をラベルへ埋め込まず、Mermaid行順、participant、SourceMapのnodeId / edgeIdを維持する。
+- 表示とコピーの内容が乖離するリスク — `mermaidText`生成後のWebView側変換を行わず、Renderer出力を両経路で共有する。

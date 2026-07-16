@@ -1,4 +1,5 @@
 import type { FlowEdge, FlowModel, FlowNode, SourceLocation } from '../flow-model';
+import { formatMessageLabel } from './messageLabel';
 
 export const rendererWarningKinds = ['unsupported-node', 'unsupported-edge'] as const;
 
@@ -140,7 +141,7 @@ class RenderContext {
 		}
 		if (target.kind === 'throw') {
 			this.markRendered(target, edge);
-			this.renderNote(`throw ${target.expression ?? ''}`.trim(), target, edge);
+			this.renderNote(formatMessageLabel({ kind: 'throw', expression: target.expression }), target, edge);
 			return;
 		}
 		if (target.kind === 'break') {
@@ -332,9 +333,12 @@ class RenderContext {
 			const uncertainLine = this.addLine(`Note over root,${participantId}: order uncertain`);
 			this.addSourceMap(edge.sourceLocation ?? node.sourceLocation, node.id, edge.id, uncertainLine);
 		}
-		const awaitPrefix = this.isAwaitedCall(edge) ? 'await ' : '';
-		const resolutionSuffix = node.resolution === 'unresolved' ? ' (unresolved)' : '';
-		const message = node.resolution === 'unknown' ? 'unknown call' : `${awaitPrefix}${node.calleeName}${resolutionSuffix}`;
+		const message = formatMessageLabel({
+			kind: 'call',
+			calleeName: node.calleeName,
+			resolution: node.resolution,
+			awaited: this.isAwaitedCall(edge),
+		});
 		const line = this.addLine(`root->>${participantId}: ${escapeText(message)}`);
 		this.addSourceMap(node.sourceLocation, node.id, edge.id, line);
 
@@ -347,7 +351,7 @@ class RenderContext {
 
 	private renderReturn(node: Extract<FlowNode, { kind: 'return' }>, edge: FlowEdge): void {
 		const sourceParticipant = this.nodeParticipants.get(edge.sourceNodeId) ?? 'root';
-		const message = `return ${node.expression ?? ''}`.trim();
+		const message = formatMessageLabel({ kind: 'return', expression: node.expression });
 		const line = this.addLine(`${sourceParticipant}-->>root: ${escapeText(message)}`);
 		this.addSourceMap(node.sourceLocation, node.id, edge.id, line);
 	}

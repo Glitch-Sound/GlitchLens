@@ -458,3 +458,36 @@
   - _Depends: 17.4_
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
   - _Boundary: Integration validation_
+
+- [x] 18. メッセージラベルの簡潔化を実装する
+- [x] 18.1 メッセージラベルの要約ポリシーを実装する
+  - Call、Return、Throw の表示ラベルを処理種別と主要な呼び出し先中心に整形し、引数・オブジェクトリテラル・配列・複合式の詳細を必要に応じて縮約する。
+  - `await`、`unresolved`、`unknown call` などの識別情報を維持し、式を実行したり意味を推測して置換したりしない。
+  - ラベル上限を80文字、超過時の省略記号を `...` として一箇所のポリシーから適用する。
+  - Observable completion: 長い `return JSON.stringify({ ... })` が `return JSON.stringify(...)` の形式で出力され、上限を超えるラベルが80文字以内に収まる。
+  - _Boundary: MessageLabelFormatter_
+  - _Requirements: 13.1, 13.2, 13.3_
+- [x] 18.2 Renderer のメッセージ生成へ要約ラベルを統合する
+  - Call、Return、Throw の Mermaid message 生成が共通の要約ポリシーを利用し、表示用ラベルを `mermaidText` へ直接反映する。
+  - メッセージの方向、FlowNode / FlowEdge の順序、participant 名、unknown / unresolved の既存表現を変更しない。
+  - SourceMap の Mermaid 行番号、nodeId、edgeId、sourceLocation を従来どおり生成し、WebView側で追加のラベル変換を行わない。
+  - Observable completion: Renderer が生成する Mermaid text に要約済みラベルが含まれ、既存の call、return、unknown、unresolved の出力契約が維持される。
+  - _Depends: 18.1_
+  - _Boundary: MermaidRenderer_
+  - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
+- [x] 18.3 メッセージラベルの単体・Renderer回帰テストを追加する
+  - 単純な呼び出し、長い引数、オブジェクトリテラル、配列、入れ子呼び出し、await、unknown、unresolved、80文字境界を検証する。
+  - `return JSON.stringify({ documentUri: key.documentUri, ... })` が `return JSON.stringify(...)` へ要約されることを確認する。
+  - 同一ラベルが複数回現れる場合も行順と SourceMap の nodeId / edgeId で識別でき、ラベルへ不要な連番を追加しないことを確認する。
+  - Observable completion: ラベル要約、Mermaid text、SourceMap の期待値を含むテストが成功し、既存 Renderer テストが回帰しない。
+  - _Depends: 18.2_
+  - _Boundary: MessageLabelFormatter tests / MermaidRenderer tests_
+  - _Requirements: 13.1, 13.2, 13.3, 13.4_
+- [x] 18.4 Mermaid表示・コピーの統合と品質検証を行う
+  - VisualizationView が Renderer の要約済み `mermaidText` をそのまま表示し、ClipboardAdapter へ同じ内容を渡すことを検証する。
+  - participant、メッセージ方向、SourceMap、コードジャンプ、fallback、Copy Mermaid の既存機能が要約化によって変わらないことを確認する。
+  - TypeScript、lint、unit test、integration test を実行し、長い return 式を含むfixtureでVS Code上の表示とコピー結果を確認する。
+  - Observable completion: 表示中のMermaid textとコピーされるMermaid textが一致し、Requirement 13 の全受け入れ条件に対応するテストが成功する。
+  - _Depends: 18.3_
+  - _Boundary: VisualizationView / ClipboardAdapter / Integration validation_
+  - _Requirements: 13.4, 13.5_

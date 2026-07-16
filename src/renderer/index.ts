@@ -7,3 +7,10 @@ export {
 	type ProcessNoteDecoration,
 	type ProcessNoteNodeKind,
 } from './mermaidRenderer';
+export {
+	defaultMessageLabelPolicy,
+	formatMessageLabel,
+	type MessageLabelInput,
+	type MessageLabelKind,
+	type MessageLabelPolicy,
+} from './messageLabel';

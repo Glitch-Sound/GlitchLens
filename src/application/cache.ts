@@ -57,3 +57,4 @@ export function serializeCacheKey(key: CacheKey): string {
 		analyzerVersion: key.analyzerVersion,
 	});
 }
+
