@@ -539,6 +539,14 @@ suite('MermaidRenderer', () => {
 		assert.deepStrictEqual(result.warnings, []);
 	});
 
+	test('does not misclassify same-line loop exits as loop-body edges', async () => {
+		const result = await renderAnalyzed('function target(items) { for (const item of items) { break; } after(); }');
+
+		assert.ok(result.mermaidText.includes('Note over root: break'));
+		assert.ok(result.mermaidText.includes('root->>after: after'));
+		assert.strictEqual(result.warnings.some(warning => warning.message.includes('targets a node inside the loop body')), false);
+	});
+
 	test('renders try catch finally and throw with critical option and note blocks', () => {
 		const model = createModel({
 			nodes: [

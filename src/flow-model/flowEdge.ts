@@ -9,6 +9,8 @@ export const flowEdgeKinds = [
 	'false',
 	'loop-body',
 	'loop-exit',
+	'break-exit',
+	'continue-loop',
 	'try',
 	'catch',
 	'finally',

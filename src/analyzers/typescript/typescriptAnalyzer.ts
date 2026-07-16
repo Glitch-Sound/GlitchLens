@@ -6,7 +6,7 @@ import type { FlowDiagnostic, FlowEdge, FlowNode, FlowModel, FlowFunction, Sourc
 
 export class TypeScriptAnalyzer implements LanguageAnalyzer {
 	public readonly id = 'typescript';
-	public readonly version = '0.3.3';
+	public readonly version = '0.4.0';
 	public readonly languageIds = ['typescript', 'javascript', 'typescriptreact', 'javascriptreact'] as const;
 
 	public async analyze(input: AnalyzerInput): Promise<AnalyzerResult> {
@@ -99,6 +99,7 @@ class FlowBuilder {
 	private skipNextEdge = false;
 	private readonly terminalNodeIds = new Set<string>();
 	private pendingNextEdges: PendingEdge[] = [];
+	private readonly loopStack: LoopContext[] = [];
 
 	public constructor(private readonly input: AnalyzerInput, private readonly sourceFile: ts.SourceFile, private readonly candidate: FunctionCandidate) {}
 
@@ -107,7 +108,7 @@ class FlowBuilder {
 		const rootFunction: FlowFunction = { id: `function:${this.candidate.range.startOffset}`, name: this.candidate.name, sourceLocation: this.location(this.candidate.range.startOffset, this.candidate.range.endOffset, this.candidate.name) };
 		const edges = this.orderedEdges();
 		return {
-			metadata: { schemaVersion: '1.0.0', analyzerId: 'typescript', analyzerVersion: '0.3.2', languageId, generatedAt: new Date().toISOString(), sourceDocumentVersion: this.input.source.version, completeness: this.completeness, configurationDigest: this.input.configuration.configurationDigest, rootFunctionIdentifier: rootFunction.id },
+			metadata: { schemaVersion: '1.0.0', analyzerId: 'typescript', analyzerVersion: '0.4.0', languageId, generatedAt: new Date().toISOString(), sourceDocumentVersion: this.input.source.version, completeness: this.completeness, configurationDigest: this.input.configuration.configurationDigest, rootFunctionIdentifier: rootFunction.id },
 			rootFunction, nodes: this.nodes, edges, diagnostics: this.diagnostics,
 			source: { uri: this.input.source.uri, languageId, documentVersion: this.input.source.version }, completeness: this.completeness,
 		};
@@ -183,12 +184,18 @@ class FlowBuilder {
 				await this.extractCalls(statement.incrementor, loop.id);
 			}
 			const start = this.nodes.length;
+			const loopContext: LoopContext = { nodeId: loop.id, breakNodeIds: [] };
+			this.loopStack.push(loopContext);
 			this.skipNextEdge = true;
 			await this.extractStatement(statement.statement);
+			this.loopStack.pop();
 			const first = this.nodes[start];
 			if (first) {this.addEdge(loop.id, first.id, 'loop-body', statement);}
 			this.consumePendingOrTail(start, 'loop-body');
-			this.pendingNextEdges = [{ sourceNodeId: loop.id, kind: 'loop-exit' }];
+			this.pendingNextEdges = [
+				{ sourceNodeId: loop.id, kind: 'loop-exit' },
+				...loopContext.breakNodeIds.map(sourceNodeId => ({ sourceNodeId, kind: 'break-exit' as const })),
+			];
 			return;
 		}
 		if (ts.isTryStatement(statement)) {
@@ -239,11 +246,14 @@ class FlowBuilder {
 		if (ts.isBreakStatement(statement)) {
 			const node = this.addNode({ kind: 'break', label: statement.label?.getText(this.sourceFile), node: statement });
 			this.terminalNodeIds.add(node.id);
+			this.loopStack[this.loopStack.length - 1]?.breakNodeIds.push(node.id);
 			return;
 		}
 		if (ts.isContinueStatement(statement)) {
 			const node = this.addNode({ kind: 'continue', label: statement.label?.getText(this.sourceFile), node: statement });
 			this.terminalNodeIds.add(node.id);
+			const loop = this.loopStack[this.loopStack.length - 1];
+			if (loop) {this.addEdge(node.id, loop.nodeId, 'continue-loop', statement);}
 			return;
 		}
 		if (ts.isExpressionStatement(statement)) {
@@ -271,13 +281,13 @@ class FlowBuilder {
 			}
 			if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
 				const callInfo = this.callInfo(node);
+				for (const child of childNodes(node)) {await visit(child);}
 				if (ownerId) {this.skipNextEdge = true;}
 				const call = this.addNode({ kind: 'call', calleeName: callInfo.calleeName, resolution: callInfo.resolution, label: callInfo.calleeName, node });
 				if (callInfo.resolution !== 'resolved') {
 					this.addDiagnostic(callInfo.resolution === 'unknown' ? 'unknown-call' : 'unresolved-call', 'warning', callInfo.message, node, call.id);
 				}
 				if (ownerId) {this.addEdge(ownerId, call.id, 'next', node);}
-				for (const child of childNodes(node)) {await visit(child);}
 				return;
 			}
 			for (const child of childNodes(node)) {await visit(child);}
@@ -316,7 +326,8 @@ class FlowBuilder {
 	}
 
 	private addEdge(sourceNodeId: string, targetNodeId: string, kind: FlowEdge['kind'], source: ts.Node): void {
-		this.edges.push({ id: `edge:${this.nextEdge}`, sourceNodeId, targetNodeId, kind, executionOrder: this.nextEdge++, sourceLocation: this.location(source.getStart(this.sourceFile), source.end) });
+		const executionOrder = this.nextEdge++;
+		this.edges.push({ id: `edge:${executionOrder}`, sourceNodeId, targetNodeId, kind, executionOrder, sourceLocation: this.location(source.getStart(this.sourceFile), source.end) });
 	}
 
 	private addDiagnostic(kind: FlowDiagnostic['kind'], severity: FlowDiagnostic['severity'], message: string, source: ts.Node, nodeId?: string): void {
@@ -442,6 +453,11 @@ interface PendingEdge {
 	readonly kind: FlowEdge['kind'];
 }
 
+interface LoopContext {
+	readonly nodeId: string;
+	readonly breakNodeIds: string[];
+}
+
 interface CallInfo {
 	readonly calleeName: string;
 	readonly resolution: 'resolved' | 'unknown' | 'unresolved';
@@ -480,8 +496,10 @@ function edgeKindOrder(kind: FlowEdge['kind']): number {
 		case 'finally': return 5;
 		case 'next': return 6;
 		case 'loop-exit': return 7;
-		case 'return': return 8;
-		case 'throw': return 9;
-		case 'uncertain': return 10;
+		case 'break-exit': return 8;
+		case 'continue-loop': return 9;
+		case 'return': return 10;
+		case 'throw': return 11;
+		case 'uncertain': return 12;
 	}
 }

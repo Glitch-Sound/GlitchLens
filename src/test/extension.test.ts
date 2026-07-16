@@ -170,10 +170,10 @@ suite('Extension Test Suite', () => {
 		const python = await vscode.workspace.openTextDocument({ language: 'python', content: 'def nope():\n    pass\n' });
 		await vscode.window.showTextDocument(python);
 		await vscode.commands.executeCommand(visualizeFunctionFlowCommandId);
-		await waitForProbeModel();
+		const pythonState = await waitForProbeModel();
+		assert.ok(pythonState.lastModel?.state === 'success' || pythonState.lastModel?.state === 'partial');
 		await vscode.commands.executeCommand('glitchlens.test.copyCurrentMermaid');
-		const state = await getProbeState();
-		assert.ok(state.notifications.includes('warning:No Mermaid text is available to copy.'));
+		assert.ok((await vscode.env.clipboard.readText()).includes('sequenceDiagram'));
 	});
 
 	test('reports unsupported language target not found panel reuse and lifecycle disposal', async () => {
@@ -183,8 +183,7 @@ suite('Extension Test Suite', () => {
 		await vscode.window.showTextDocument(python);
 		await vscode.commands.executeCommand(visualizeFunctionFlowCommandId);
 		let state = await waitForProbeModel();
-		assert.strictEqual(state.lastModel?.state, 'failure');
-		assert.ok(state.notifications.some(message => message.includes('unsupported-language')));
+		assert.ok(state.lastModel?.state === 'success' || state.lastModel?.state === 'partial');
 
 		const outside = await vscode.workspace.openTextDocument({ language: 'typescript', content: 'const value = 1;\nfunction later() {}\n' });
 		const editor = await vscode.window.showTextDocument(outside);

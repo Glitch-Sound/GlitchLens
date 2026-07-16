@@ -288,6 +288,10 @@ class RenderContext {
 			this.renderedEdgeIds.add(edge.id);
 			return [];
 		}
+		if (edge.kind === 'continue-loop') {
+			this.renderedEdgeIds.add(edge.id);
+			return [];
+		}
 		if (boundary && !isWithinBoundary(target, boundary)) {
 			return [edge];
 		}
@@ -307,7 +311,7 @@ class RenderContext {
 			return [];
 		}
 		const exitEdges: FlowEdge[] = [];
-		for (const nextEdge of this.outgoingEdges(target.id, ['next', 'loop-exit', 'return', 'throw', 'uncertain'])) {
+		for (const nextEdge of this.outgoingEdges(target.id, ['next', 'loop-exit', 'break-exit', 'return', 'throw', 'uncertain'])) {
 			if (this.renderedEdgeIds.has(nextEdge.id)) {
 				continue;
 			}
@@ -475,14 +479,25 @@ function isWithinBoundary(node: FlowNode, boundary: FlowNode): boolean {
 	if (node.id === boundary.id) {
 		return false;
 	}
-	const nodeStart = node.sourceLocation.range.start.line;
-	const nodeEnd = node.sourceLocation.range.end.line;
-	const boundaryStart = boundary.sourceLocation.range.start.line;
-	const boundaryEnd = boundary.sourceLocation.range.end.line;
-	if (boundaryEnd > boundaryStart) {
-		return nodeStart >= boundaryStart && nodeEnd <= boundaryEnd;
+	const nodeStart = positionKey(node.sourceLocation.range.start.line, node.sourceLocation.range.start.character);
+	const nodeEnd = positionKey(node.sourceLocation.range.end.line, node.sourceLocation.range.end.character);
+	const boundaryStart = positionKey(boundary.sourceLocation.range.start.line, boundary.sourceLocation.range.start.character);
+	const boundaryEnd = positionKey(boundary.sourceLocation.range.end.line, boundary.sourceLocation.range.end.character);
+	if (nodeStart >= boundaryStart && nodeEnd <= boundaryEnd) {
+		return true;
 	}
-	return node.order > boundary.order;
+	// Synthetic/control nodes may expose only a one-line header range. In that
+	// case, preserve the established order-based fallback for following body
+	// nodes while still using character positions to distinguish same-line exits.
+	if (boundary.sourceLocation.range.start.line === boundary.sourceLocation.range.end.line
+		&& node.sourceLocation.range.start.line > boundary.sourceLocation.range.end.line) {
+		return node.order > boundary.order;
+	}
+	return false;
+}
+
+function positionKey(line: number, character: number): number {
+	return line * 1_000_000 + character;
 }
 
 function sanitizeIdentifier(value: string): string {

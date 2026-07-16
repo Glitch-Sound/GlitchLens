@@ -4,16 +4,20 @@ import { createFunctionCodeLensCommands } from './codeLensCommands';
 import { visualizeFunctionFlowCommandId } from './commandIds';
 import { isSupportedLanguage, supportedLanguageIds } from './documentSelector';
 import { getWorkspaceTrustGuard, type WorkspaceTrustGuard } from './workspaceTrust';
+import type { FunctionLocatorRegistry } from '../analyzers';
 
-export function registerGlitchLensCodeLensProvider(context: vscode.ExtensionContext): void {
+export function registerGlitchLensCodeLensProvider(context: vscode.ExtensionContext, locatorRegistry?: FunctionLocatorRegistry): void {
 	const selectors = supportedLanguageIds.map(language => ({ language, scheme: 'file' }));
-	const provider = new GlitchLensCodeLensProvider();
+	const provider = new GlitchLensCodeLensProvider(getWorkspaceTrustGuard, locatorRegistry);
 
 	context.subscriptions.push(vscode.languages.registerCodeLensProvider(selectors, provider));
 }
 
 export class GlitchLensCodeLensProvider implements vscode.CodeLensProvider {
-	public constructor(private readonly trustGuardFactory: () => Pick<WorkspaceTrustGuard, 'canProvideCodeLens'> = getWorkspaceTrustGuard) {}
+	public constructor(
+		private readonly trustGuardFactory: () => Pick<WorkspaceTrustGuard, 'canProvideCodeLens'> = getWorkspaceTrustGuard,
+		private readonly locatorRegistry?: FunctionLocatorRegistry,
+	) {}
 
 	public provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.CodeLens[] {
 		const trustGuard = this.trustGuardFactory();
@@ -26,7 +30,7 @@ export class GlitchLensCodeLensProvider implements vscode.CodeLensProvider {
 			languageId: document.languageId,
 			version: document.version,
 			text: document.getText(),
-		}, trustGuard).map(candidate => {
+		}, trustGuard, this.locatorRegistry).map(candidate => {
 			const range = new vscode.Range(
 				candidate.range.startLine,
 				candidate.range.startCharacter,

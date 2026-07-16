@@ -42,14 +42,14 @@ suite('GlitchLens foundation', () => {
 		assert.ok(!JSON.stringify(packageJson).toLowerCase().includes('llm'));
 	});
 
-	test('activates only for the visualization command and initial TypeScript JavaScript targets', () => {
+	test('activates for the visualization command and registered language targets', () => {
 		const activationEvents = packageJson.activationEvents ?? [];
 
 		assert.ok(activationEvents.includes(`onCommand:${visualizeFunctionFlowCommandId}`));
 		for (const languageId of supportedLanguageIds) {
 			assert.ok(activationEvents.includes(`onLanguage:${languageId}`));
 		}
-		assert.ok(!activationEvents.includes('onLanguage:python'));
+		assert.ok(activationEvents.includes('onLanguage:python'));
 		assert.ok(!activationEvents.includes('onLanguage:java'));
 		assert.ok(!activationEvents.includes('onLanguage:go'));
 		assert.ok(!activationEvents.includes('onLanguage:csharp'));
@@ -158,7 +158,7 @@ suite('GlitchLens foundation', () => {
 
 		assert.ok(entrySource.includes('context.subscriptions.push(view)'));
 		assert.ok(entrySource.includes('registerGlitchLensCommands(context, controller)'));
-		assert.ok(entrySource.includes('registerGlitchLensCodeLensProvider(context)'));
+		assert.ok(entrySource.includes('registerGlitchLensCodeLensProvider(context, locatorRegistry)'));
 		assert.ok(entrySource.includes('onDidGrantWorkspaceTrust'));
 		assert.ok(adapterSource.includes('VsCodeClipboardAdapter'));
 		assert.ok(adapterSource.includes('getWorkspaceTrustGuard'));

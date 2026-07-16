@@ -29,6 +29,8 @@ suite('Common Flow Model contract', () => {
 			'false',
 			'loop-body',
 			'loop-exit',
+			'break-exit',
+			'continue-loop',
 			'try',
 			'catch',
 			'finally',

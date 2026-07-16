@@ -38,7 +38,8 @@
     "onLanguage:typescript",
     "onLanguage:javascript",
     "onLanguage:typescriptreact",
-    "onLanguage:javascriptreact"
+    "onLanguage:javascriptreact",
+    "onLanguage:python"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -62,7 +63,8 @@
             "typescript",
             "javascript",
             "typescriptreact",
-            "javascriptreact"
+            "javascriptreact",
+            "python"
           ],
           "items": {
             "type": "string"
@@ -113,6 +115,7 @@
     "serialize-javascript": "^7.0.6"
   },
   "dependencies": {
+    "@lezer/python": "^1.1.19",
     "mermaid": "^11.16.0"
   }
 }

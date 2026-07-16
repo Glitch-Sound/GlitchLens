@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import { AnalysisCache, AnalyzerRegistry, VisualizeFunctionFlowUseCase, type VisualizationResult } from '../application';
-import { TypeScriptAnalyzer } from '../analyzers';
+import { FunctionLocatorRegistry, PythonAnalyzer, PythonFunctionLocator, TypeScriptAnalyzer, TypeScriptFunctionLocator } from '../analyzers';
 import { MermaidRenderer } from '../renderer';
 import { CommandController, type CommandNotification, type CommandProgress } from './commandController';
 import type { IntegrationTestProbe } from './testSupport';
@@ -24,9 +24,16 @@ export function createVsCodeVisualizationView(probe?: IntegrationTestProbe): Web
 	);
 }
 
+export function createVsCodeFunctionLocatorRegistry(): FunctionLocatorRegistry {
+	return new FunctionLocatorRegistry([
+		new TypeScriptFunctionLocator(),
+		new PythonFunctionLocator(),
+	]);
+}
+
 export function createVsCodeCommandController(view: WebviewVisualizationAdapter, probe?: IntegrationTestProbe): CommandController {
 	const useCase = new VisualizeFunctionFlowUseCase(
-		new AnalyzerRegistry([new TypeScriptAnalyzer()]),
+		new AnalyzerRegistry([new TypeScriptAnalyzer(), new PythonAnalyzer()]),
 		new MermaidRenderer(),
 		new AnalysisCache(),
 	);

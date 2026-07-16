@@ -1,6 +1,7 @@
 import { visualizeFunctionFlowCommandId } from './commandIds';
 import { isSupportedLanguage } from './documentSelector';
 import { findFunctionCandidates, type FunctionCandidate, type TextRange } from './functionRanges';
+import type { FunctionLocatorRegistry } from '../analyzers';
 import type { WorkspaceTrustGuard } from './workspaceTrustPolicy';
 
 export interface CodeLensSourceInput {
@@ -23,12 +24,12 @@ export interface FunctionCodeLensCommand {
 	};
 }
 
-export function createFunctionCodeLensCommands(source: CodeLensSourceInput, trustGuard?: Pick<WorkspaceTrustGuard, 'canProvideCodeLens'>): FunctionCodeLensCommand[] {
+export function createFunctionCodeLensCommands(source: CodeLensSourceInput, trustGuard?: Pick<WorkspaceTrustGuard, 'canProvideCodeLens'>, locatorRegistry?: FunctionLocatorRegistry): FunctionCodeLensCommand[] {
 	if (trustGuard?.canProvideCodeLens === false || !isSupportedLanguage(source.languageId)) {
 		return [];
 	}
 
-	return findFunctionCandidates(source).map(candidate => toCommand(source, candidate));
+	return findFunctionCandidates(source, locatorRegistry).map(candidate => toCommand(source, candidate));
 }
 
 function toCommand(source: CodeLensSourceInput, candidate: FunctionCandidate): FunctionCodeLensCommand {

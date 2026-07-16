@@ -43,7 +43,7 @@ suite('TypeScriptAnalyzer static flow extraction', () => {
 		const result = await analyze(`const target = () => outer(inner());`, 'javascript', 18);
 		assert.strictEqual(result.status, 'success');
 		if (result.status !== 'success') {return;}
-		assert.deepStrictEqual(result.model.nodes.filter(node => node.kind === 'call').map(node => node.calleeName), ['outer', 'inner']);
+		assert.deepStrictEqual(result.model.nodes.filter(node => node.kind === 'call').map(node => node.calleeName), ['inner', 'outer']);
 	});
 
 	test('does not connect mutually exclusive branches with a sequential edge', async () => {

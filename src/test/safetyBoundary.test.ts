@@ -97,7 +97,7 @@ suite('Local static analysis safety boundary', () => {
 			configuration: packageJson.contributes?.configuration ?? {},
 		}).toLowerCase();
 
-		assert.deepStrictEqual(productionDependencies, ['mermaid']);
+		assert.deepStrictEqual(productionDependencies.sort(), ['@lezer/python', 'mermaid']);
 		assert.deepStrictEqual(productionDependencies.filter(isExternalAnalyzerOrLlmDependency), []);
 		assert.deepStrictEqual(devDependencies.filter(isExternalAnalyzerOrLlmDependency), []);
 		for (const term of ['llm', 'openai', 'anthropic', 'telemetry', 'analytics', 'upload']) {

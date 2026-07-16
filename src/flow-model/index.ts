@@ -15,6 +15,8 @@ export type {
 	FlowReturnNode,
 	FlowThrowNode,
 	FlowTryCatchNode,
+ 	FlowBreakNode,
+ 	FlowContinueNode,
 } from './flowNode';
 export { callResolutions, flowNodeKinds, isFlowNodeKind } from './flowNode';
 export type { AnalysisCompleteness, FlowModelMetadata } from './metadata';

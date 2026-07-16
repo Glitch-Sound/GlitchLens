@@ -3,16 +3,17 @@ import * as vscode from 'vscode';
 import { registerGlitchLensCodeLensProvider } from './codeLensProvider';
 import { registerGlitchLensCommands } from './commands';
 import { IntegrationTestProbe, registerIntegrationTestSupport } from './testSupport';
-import { createVsCodeCommandController, createVsCodeVisualizationView } from './vscodeAdapters';
+import { createVsCodeCommandController, createVsCodeFunctionLocatorRegistry, createVsCodeVisualizationView } from './vscodeAdapters';
 
 export function registerGlitchLensExtension(context: vscode.ExtensionContext): void {
 	const probe = context.extensionMode === vscode.ExtensionMode.Test ? new IntegrationTestProbe() : undefined;
 	const view = createVsCodeVisualizationView(probe);
 	const controller = createVsCodeCommandController(view, probe);
+	const locatorRegistry = createVsCodeFunctionLocatorRegistry();
 
 	context.subscriptions.push(view);
 	registerGlitchLensCommands(context, controller);
-	registerGlitchLensCodeLensProvider(context);
+	registerGlitchLensCodeLensProvider(context, locatorRegistry);
 	registerDocumentChangeCancellation(context, controller);
 	registerWorkspaceTrustLifecycle(context);
 	if (probe) {

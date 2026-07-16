@@ -1,4 +1,5 @@
-import { findFunctionCandidates as findTypeScriptFunctionCandidates } from '../analyzers/typescript/functionLocator';
+import { FunctionLocatorRegistry, TypeScriptFunctionLocator } from '../analyzers';
+import type { FunctionLocator } from '../analyzers';
 
 export interface TextRange {
 	readonly startLine: number;
@@ -19,8 +20,14 @@ export interface FunctionCandidateInput {
 	readonly text: string;
 }
 
-export function findFunctionCandidates(input: FunctionCandidateInput): FunctionCandidate[] {
-	return findTypeScriptFunctionCandidates(input).map(candidate => ({
+const defaultFunctionLocatorRegistry = new FunctionLocatorRegistry([new TypeScriptFunctionLocator()]);
+
+export function findFunctionCandidates(input: FunctionCandidateInput, registry = defaultFunctionLocatorRegistry): FunctionCandidate[] {
+	const selected = registry.resolve(input.languageId);
+	if (selected.status !== 'found') {
+		return [];
+	}
+	return selected.locator.findFunctionCandidates(input).map(candidate => ({
 		name: candidate.name,
 		range: {
 			startLine: candidate.range.start.line,
