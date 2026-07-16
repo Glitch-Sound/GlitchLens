@@ -390,7 +390,7 @@
   - _Boundary: Integration validation_
   - _Depends: 15.2_
 
-- [ ] 16. 条件ラベルの視認性を改善する
+- [x] 16. 条件ラベルの視認性を改善する
 - [x] 16.1 条件ラベルの色と位置を枠線に合わせて調整する
   - 任意のフラグメント種別と条件文言について、条件ラベルを対応するフラグメント種別ラベル・制御ブロック枠線と同じ色で表示する。
   - Mermaid描画後のSVG装飾でラベル要素だけを対象にし、枠線・枠範囲・条件文言・メッセージ間隔・Mermaid textを変更しない。
@@ -407,7 +407,7 @@
   - _Boundary: VisualizationView tests / Webview Mermaid tests_
   - _Depends: 16.1_
 
-- [ ] 16.3 条件ラベル改善の統合検証と品質ゲートを行う
+- [x] 16.3 条件ラベル改善の統合検証と品質ゲートを行う
   - Dark / Lightテーマ、関数ごとに異なる長い条件文、ネストした制御ブロックを含む図でラベルと枠線の対応および上部配置を確認する。
   - Mermaid text、Copy Mermaid、SourceMap、fallback、メッセージラベル位置調整に回帰がないことを確認する。
   - `npm run check-types`、`npm run lint`、`npm run compile`、`npm run test:unit`、`npm run test:integration`を実行する。
@@ -491,3 +491,28 @@
   - _Depends: 18.3_
   - _Boundary: VisualizationView / ClipboardAdapter / Integration validation_
   - _Requirements: 13.4, 13.5_
+
+- [x] 19. コレクションメソッドの静的呼び出し判定を改善する
+- [x] 19.1 動的 receiver 上のコレクションメソッド分類を実装する
+  - 呼び出し式の戻り値に対する標準コレクションメソッドを resolved として扱い、`map` などのメソッド名を通常の participant / message 表示へ渡す。
+  - コレクションメソッドと判断できない動的オブジェクトメソッドは unresolved、計算プロパティは unknown として既存契約を維持する。
+  - receiver の実行時型評価、外部モジュール解析、呼び出し先内部への再帰的解析を追加しない。
+  - Observable completion: `findFunctionCandidates(source).map(...)` で `map` に unresolved diagnostic / Note が生成されず、`factory.getService(name).run()` は unresolved のままになる。
+  - _Boundary: TypeScriptAnalyzer_
+  - _Requirements: 14.1, 14.2, 14.3_
+- [x] 19.2 判定規則、SourceMap、キャッシュ無効化の回帰テストを追加する
+  - コレクションメソッドの resolved 判定、動的オブジェクトメソッドの unresolved 判定、計算プロパティの unknown 判定を fixture で検証する。
+  - Mermaid の participant / message、呼び出し順序、SourceMap、コードジャンプ、部分解析、unresolved Note が既存契約どおりであることを確認する。
+  - Analyzer の判定規則を更新した場合に analyzer version の差分で旧解析結果が cache hit にならないことを検証する。
+  - Observable completion: `typescriptFlowExtractor.test.ts` と既存の cache / Renderer テストで Requirement 14.1〜14.5 の期待結果が確認できる。
+  - _Depends: 19.1_
+  - _Boundary: TypeScriptAnalyzer tests / MermaidRenderer tests / AnalysisCache tests_
+  - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5_
+- [x] 19.3 コレクションメソッド判定の統合検証と品質ゲートを行う
+  - CodeLens から解析した関数で `map` が resolved 表示され、`unresolved call` の Note が表示されないことを確認する。
+  - 動的オブジェクトメソッド、計算プロパティ、SourceMap、コードジャンプ、partial result、Mermaid コピーに回帰がないことを確認する。
+  - Analyzer version 更新後に旧キャッシュが再利用されないことを確認し、`npm run check-types`、`npm run lint`、`npm run compile`、`npm run test:unit`、`npm run test:integration` を実行する。
+  - Observable completion: Requirement 14 の全受け入れ条件を満たす統合テストと品質ゲートが成功する。
+  - _Depends: 19.2_
+  - _Boundary: VisualizationView / CommandController / Integration validation_
+  - _Requirements: 14.2, 14.3, 14.4, 14.5_

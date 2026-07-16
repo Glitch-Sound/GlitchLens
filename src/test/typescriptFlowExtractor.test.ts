@@ -264,6 +264,16 @@ suite('TypeScriptAnalyzer unresolved partial and cancellation handling', () => {
 		assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call' && diagnostic.sourceLocation));
 	});
 
+	test('keeps collection methods resolved after a call expression receiver', async () => {
+		const result = await analyze(`function target(source) { return findFunctionCandidates(source).map(candidate => toCommand(source, candidate)); }`, 'typescript', 20);
+		assert.ok(result.status === 'success' || result.status === 'partial');
+		if (result.status !== 'success' && result.status !== 'partial') {return;}
+		const mapCall = result.model.nodes.find((node): node is Extract<typeof node, { kind: 'call' }> => node.kind === 'call' && node.calleeName === 'map');
+		assert.ok(mapCall);
+		assert.strictEqual(mapCall.resolution, 'resolved');
+		assert.ok(!result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call' && diagnostic.nodeId === mapCall.id));
+	});
+
 	test('marks computed property and optional chaining calls as unresolved or unknown without forcing full resolution', async () => {
 		const result = await analyze(`function target(obj, key, maybe) { obj[key](); maybe?.(); obj?.run(); }`, 'javascript', 20);
 		assert.strictEqual(result.status, 'partial');

@@ -262,3 +262,50 @@
 - 式の構文を誤って意味要約するリスク — 呼び出し先の安全な抽出に失敗した場合は空白正規化と長さ制限へフォールバックし、意味の推測を行わない。
 - 同一ラベルの呼び出しを識別しづらくなるリスク — 連番をラベルへ埋め込まず、Mermaid行順、participant、SourceMapのnodeId / edgeIdを維持する。
 - 表示とコピーの内容が乖離するリスク — `mermaidText`生成後のWebView側変換を行わず、Renderer出力を両経路で共有する。
+
+---
+
+## Requirement 14: コレクションメソッドの静的呼び出し判定
+
+### Summary
+
+- `FlowBuilder.callInfo` は PropertyAccessExpression の receiver が CallExpression である場合、メソッド名に関係なく dynamic receiver として unresolved にしていた。
+- `findFunctionCandidates(source).map(...)` の `map` は、表示上は既知の標準コレクション操作として識別できるため、動的オブジェクトメソッドとは異なる扱いが必要である。
+- `factory.getService(name).run()` と `serviceMap[type].execute()` は receiver の実体を静的に確定できないため、unresolved を維持する。
+- Analyzer version は CacheKey に含まれているため、判定規則を変更した場合に version を更新すれば旧結果を再利用しない契約を満たせる。
+
+### Research Log
+
+#### Existing Classification Logic
+
+- **Sources Consulted**: `src/analyzers/typescript/typescriptAnalyzer.ts`, `src/test/typescriptFlowExtractor.test.ts`, `src/application/cache.ts`, `src/application/visualizeFunctionFlow.ts`, `src/renderer/mermaidRenderer.ts`
+- **Findings**:
+  - `callInfo` は PropertyAccessExpression の receiver が CallExpression、NewExpression、ElementAccessExpression、optional access の場合に unresolved を返す。
+  - ElementAccessExpression の callable target は unknown として扱われる。
+  - `FlowCallNode.resolution` は Renderer の participant、message、unresolved Note、diagnostic の分岐に使われる。
+  - CacheKey は analyzer id と analyzer version を含み、version が異なると cache miss になる。
+- **Implications**:
+  - 判定変更は Analyzer 層の `callInfo` に閉じ込め、FlowModel と Renderer の契約を変更しない。
+  - collection method だけを例外的に resolved とし、動的 receiver の一般的な完全解決へ拡張しない。
+
+#### Design Decision: Syntax-based Collection Method Policy
+
+- **Alternatives Considered**:
+  1. すべての CallExpression receiver の method call を resolved とする。
+  2. TypeScript Program / TypeChecker を導入して receiver の実行時型を解決する。
+  3. 標準コレクションメソッド名を構文上の表示ポリシーとして扱い、それ以外は従来の unresolved 判定を維持する。
+- **Selected Approach**: 3を採用する。
+- **Rationale**: 新しいProgram構築や外部モジュール解決を導入せず、`map` などの一般的な操作を正確に表示できる。動的オブジェクトメソッドの不確実性も保持できる。
+- **Trade-offs**: 同名のカスタムメソッドを完全には識別できないため、対象集合を拡張するときは動的オブジェクトメソッドの回帰テストを必須とする。
+
+#### Design Synthesis
+
+- **Generalization**: 問題は `map` 固有ではなく、CallExpression receiver 上の標準コレクション操作という判定カテゴリに一般化する。ただし実装は必要なメソッド集合に限定する。
+- **Build vs. Adopt**: TypeScript TypeChecker の導入は採用せず、既存の Compiler API AST と既存 CacheKey 契約を利用する。
+- **Simplification**: 新しい Analyzer interface や FlowModel field は追加せず、既存 `CallResolution` の分類だけを修正する。
+
+### Risks and Mitigations
+
+- カスタムオブジェクトの `map` を誤って resolved にするリスク — collection method 集合を限定し、動的 `run` や計算プロパティの unresolved / unknown 回帰を維持する。
+- 判定変更後に旧キャッシュが残るリスク — Analyzer version を更新し、既存 CacheKey の version 差分による cache miss を利用する。
+- resolved と完全な型解決を混同するリスク — 設計と診断文言で、resolved は表示上の操作識別を意味し receiver の実行時型保証ではないことを明記する。

@@ -6,7 +6,7 @@ import type { FlowDiagnostic, FlowEdge, FlowNode, FlowModel, FlowFunction, Sourc
 
 export class TypeScriptAnalyzer implements LanguageAnalyzer {
 	public readonly id = 'typescript';
-	public readonly version = '0.3.2';
+	public readonly version = '0.3.3';
 	public readonly languageIds = ['typescript', 'javascript', 'typescriptreact', 'javascriptreact'] as const;
 
 	public async analyze(input: AnalyzerInput): Promise<AnalyzerResult> {
@@ -398,7 +398,7 @@ class FlowBuilder {
 			return { calleeName: '<unknown>', resolution: 'unknown', message: 'Computed callable target could not be named statically.' };
 		}
 		if (ts.isPropertyAccessExpression(expression)) {
-			if (this.isDynamicReceiver(expression.expression)) {
+			if (this.isDynamicReceiver(expression.expression) && !collectionMethodNames.has(expression.name.text)) {
 				return { calleeName: expression.name.text, resolution: 'unresolved', message: `Call "${expression.name.text}" has a dynamic receiver and was kept unresolved.` };
 			}
 			return { calleeName: expression.name.text, resolution: 'resolved', message: '' };
@@ -430,6 +430,12 @@ class FlowBuilder {
 		this.throwIfCancelled();
 	}
 }
+
+const collectionMethodNames = new Set([
+	'at', 'concat', 'entries', 'every', 'filter', 'find', 'findIndex', 'flat', 'flatMap', 'forEach',
+	'includes', 'indexOf', 'join', 'keys', 'lastIndexOf', 'map', 'reduce', 'reduceRight', 'reverse',
+	'slice', 'some', 'sort', 'values',
+]);
 
 interface PendingEdge {
 	readonly sourceNodeId: string;
