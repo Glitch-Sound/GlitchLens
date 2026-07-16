@@ -31,6 +31,18 @@
 
 ## Research Log
 
+### 処理 Note の密度とテーマ識別性
+- **Context**: Requirement 12 は、制御移動・式評価に由来する処理ブロックを、固定の表示文言に依存せずコンパクトかつキャンバス背景から区別できる見た目にすることを求める。
+- **Sources Consulted**: `src/renderer/mermaidRenderer.ts`, `src/application/visualizeFunctionFlow.ts`, `src/integration/visualizationView.ts`, `src/integration/webviewMermaid.js`, `node_modules/mermaid/dist/chunks/mermaid.esm/sequenceDiagram-DXCB7GA4.mjs`。
+- **Findings**:
+  - `throw`、`break`、`continue`、`expression` は Renderer の共通 `renderNote` 経路から `Note over root` として出力される。一方、unknown / unresolved call、order uncertainty、diagnostic も Note を生成するため、描画済み SVG の文字列だけでは処理 Note を安全に区別できない。
+  - Mermaid sequence renderer は `noteMargin` を Note text の周囲の余白と Note の幅・高さ計算に使用する。`noteMargin: 20` は全 Note に対する内側余白を大きくしている。
+  - Mermaid の theme variable には `noteBkgColor`、`noteBorderColor`、`noteTextColor` があり、現実装は VS Code の `textBlockQuote` 系テーマ変数から解決している。キャンバスとの差をより明確にするには `editorWidget` 系の背景・枠線を優先できる。
+- **Implications**:
+  - Renderer は Mermaid text・SourceMap を変えず、処理 Note を出力した行番号と FlowNode kind だけの表示専用メタデータを返す。
+  - Application と VisualizationView はこのメタデータを別 payload として Webview へ渡し、Webview は固定文言や画面上の距離ではなくそのメタデータで対象 Note を選ぶ。
+  - `noteMargin` は `12` に縮める。これは Mermaid sequence の全 Note に作用するレイアウト設定だが、メッセージ、participant、activation、control block の余白設定は維持する。処理 Note 固有の色装飾はメタデータに基づいて適用する。
+
 ### メッセージラベル位置調整
 - **Context**: Requirement 9.23 の追加に伴い、メッセージ間隔を変えずにラベルと線の距離だけを縮める方法を確認した。
 - **Sources Consulted**: `src/integration/webviewMermaid.js`, `src/integration/visualizationView.ts`、既存の Mermaid sequence 設定および SVG 装飾処理。
@@ -168,6 +180,27 @@
 - **Decision**: 条件ラベルの `fill` は対応する `CONTROL_COLOR_BY_KEYWORD` と同じ値を使用する。位置はラベル要素の表示用 `transform` のみを変更し、Mermaid の `x`、`y`、`textLength`、`lengthAdjust`、枠範囲、メッセージ間隔は変更しない。
 - **Build vs. Adopt**: 新規ライブラリやMermaid設定の追加は不要で、既存のSVG後処理とCSS/SVG標準の表示変換を利用する。
 - **Risk**: MermaidのバージョンやSVGグループ構造により対象要素の親子関係が変わる可能性があるため、5種類の条件を含むfixtureでラベル要素と対応枠の両方を検証する。
+
+### Decision: 処理 Note は表示専用メタデータで識別する
+- **Context**: 処理 Note の装飾を `continue`、`break`、`retry++` のような固定文言や、SVG上の相対位置で判定すると、任意の式・ネスト・診断 Note が混在する図で誤装飾する。
+- **Alternatives Considered**:
+  1. Note の文字列を正規表現で判定する。
+  2. すべての Mermaid Note を処理 Note として装飾する。
+  3. Renderer が FlowNode kind と Mermaid 出力行を表示専用メタデータとして返す。
+- **Selected Approach**: `throw`、`break`、`continue`、`expression` の Note 出力時に `ProcessNoteDecoration` を記録し、Application と VisualizationView を経由して Webview へ渡す。Webview は元の Mermaid text の Note 出現行と SVG Note group を決定的に対応付け、メタデータにあるものだけを装飾する。対応が検証できない場合は装飾を省略する。
+- **Rationale**: Common Flow Model の kind を唯一の判定根拠にでき、Mermaid text、SourceMap、コピー内容を保ったまま任意の処理文言へ対応できる。
+- **Trade-offs**: Renderer result と Webview payload に小さな表示専用配列が増える。Mermaid の SVG Note group 構造が変化した場合は対応付けを再検証する必要がある。
+- **Follow-up**: 実 Mermaid 描画 SVG fixture で、処理 Note・diagnostic Note・ネストした制御構造を混在させ、対象だけが装飾されることを確認する。
+
+### 処理 Note 背景のコントラスト強化
+- **Context**: `--vscode-editorWidget-background` はテーマによってキャンバス背景と近い値になり、処理 Note の背景差が視認できない場合がある。
+- **Decision**: 処理 Note の背景はキャンバス背景と VS Code のリンク色を `color-mix` で合成し、テーマ性を維持しながら青系の差分を常に持たせる。未対応ブラウザー向けの fallback 色も CSS に含める。
+- **Implications**: Note 自体の Mermaid text、Note 以外の背景、SourceMap、コピー対象は変更しない。Dark / Light テーマの実 SVG fixture でキャンバス背景との差を確認する。
+
+### Design Synthesis: 処理 Note の表示改善
+- **Generalization**: `continue`、`break`、任意の式評価はすべて FlowNode kind から出力される処理 Note として扱い、表示文字列では区別しない。
+- **Build vs. Adopt**: Mermaid が提供する `noteMargin` と theme variables、既存の Webview SVG 後処理を利用し、新規ライブラリや独自 SVG renderer は導入しない。
+- **Simplification**: FlowModel へ表示色や余白を追加せず、Renderer result の最小限の行番号・kind メタデータと Webview の CSS class だけで完結する。SourceMap を表示装飾用に転用しない。
 
 ## Risks & Mitigations
 

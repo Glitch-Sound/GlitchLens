@@ -69,6 +69,7 @@ export interface VisualizationSuccessResult {
 	readonly mermaidText: string;
 	readonly canCopyMermaid: true;
 	readonly sourceMap: RenderResult['sourceMap'];
+	readonly processNoteDecorations: RenderResult['processNoteDecorations'];
 	readonly notices: readonly VisualizationNotice[];
 	readonly completeness: 'complete' | 'partial';
 	readonly model: FlowModel;
@@ -139,6 +140,7 @@ export class VisualizeFunctionFlowUseCase {
 					mermaidText: result.mermaidText,
 					warnings: [],
 					sourceMap: result.sourceMap,
+					processNoteDecorations: result.processNoteDecorations,
 				},
 				createdAt: new Date().toISOString(),
 			});
@@ -184,6 +186,7 @@ export class VisualizeFunctionFlowUseCase {
 				mermaidText: rendered.mermaidText,
 				canCopyMermaid: true,
 				sourceMap: rendered.sourceMap,
+				processNoteDecorations: rendered.processNoteDecorations,
 				notices,
 				completeness: analysis.completeness,
 				model: analysis.model,

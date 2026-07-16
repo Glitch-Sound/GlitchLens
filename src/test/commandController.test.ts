@@ -363,6 +363,7 @@ function successResult(status: 'success' | 'partial' = 'success'): Visualization
 		mermaidText: 'sequenceDiagram\n',
 		canCopyMermaid: true,
 		sourceMap: [],
+		processNoteDecorations: [],
 		notices: [],
 		completeness: status === 'partial' ? 'partial' : 'complete',
 		model: {

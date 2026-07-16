@@ -20,10 +20,18 @@ export interface RenderSourceMapEntry {
 	readonly sourceLocation: SourceLocation;
 }
 
+export type ProcessNoteNodeKind = 'throw' | 'break' | 'continue' | 'expression';
+
+export interface ProcessNoteDecoration {
+	readonly mermaidLine: number;
+	readonly nodeKind: ProcessNoteNodeKind;
+}
+
 export interface RenderResult {
 	readonly mermaidText: string;
 	readonly warnings: readonly RendererWarning[];
 	readonly sourceMap: readonly RenderSourceMapEntry[];
+	readonly processNoteDecorations: readonly ProcessNoteDecoration[];
 }
 
 interface Participant {
@@ -48,6 +56,7 @@ class RenderContext {
 	private readonly renderedEdgeIds = new Set<string>();
 	private readonly warnings: RendererWarning[] = [];
 	private readonly sourceMap: RenderSourceMapEntry[] = [];
+	private readonly processNoteDecorations: ProcessNoteDecoration[] = [];
 	private nextUnknownParticipant = 1;
 	private nextWarning = 0;
 
@@ -65,6 +74,7 @@ class RenderContext {
 			mermaidText: `${this.lines.join('\n')}\n`,
 			warnings: this.warnings,
 			sourceMap: this.sourceMap,
+			processNoteDecorations: this.processNoteDecorations,
 		};
 	}
 
@@ -345,6 +355,9 @@ class RenderContext {
 	private renderNote(message: string, node: FlowNode, edge: FlowEdge): void {
 		const line = this.addLine(`Note over root: ${escapeText(message)}`);
 		this.addSourceMap(node.sourceLocation, node.id, edge.id, line);
+		if (isProcessNoteNodeKind(node.kind)) {
+			this.processNoteDecorations.push({ mermaidLine: line, nodeKind: node.kind });
+		}
 	}
 
 	private renderDiagnostics(): void {
@@ -448,6 +461,10 @@ class RenderContext {
 			return target !== undefined && isWithinBoundary(target, loop);
 		});
 	}
+}
+
+function isProcessNoteNodeKind(kind: FlowNode['kind']): kind is ProcessNoteNodeKind {
+	return kind === 'throw' || kind === 'break' || kind === 'continue' || kind === 'expression';
 }
 
 function isWithinBoundary(node: FlowNode, boundary: FlowNode): boolean {

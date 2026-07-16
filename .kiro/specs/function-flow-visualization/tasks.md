@@ -415,3 +415,46 @@
   - _Requirements: 4.2, 4.3, 5.1, 5.2, 9.23, 11.1, 11.2, 11.3, 11.4, 11.5_
   - _Boundary: Integration validation_
   - _Depends: 16.2_
+
+- [x] 17. 処理 Note の密度とテーマ識別性を改善する
+- [x] 17.1 処理 Note の意味的な表示メタデータを Renderer から生成する
+  - 制御移動・式評価の FlowNode kind から生成された Note だけを、Mermaid 出力行と kind を持つ表示専用メタデータとして記録する。
+  - Mermaid text、既存の source map、renderer warning、処理順の意味を変更せず、unknown・unresolved・diagnostic に由来する Note を処理 Note として記録しない。
+  - Observable completion: 異なる `throw`、`break`、`continue`、任意の式評価で、表示文言に依存せず該当 Note の Mermaid 出力行と kind が返る。
+  - _Requirements: 12.4, 12.6_
+  - _Boundary: MermaidRenderer_
+
+- [x] 17.2 処理 Note メタデータを表示専用 payload として統合する
+  - Renderer が返した処理 Note メタデータを Application、cache、VisualizationViewModel を通じて Webview へ渡す。
+  - Mermaid text、SourceMap、notice、Copy Mermaid の payload と責務を混在させず、fallback 表示では空のメタデータを渡す。
+  - Observable completion: 成功・部分結果・fallback の各表示モデルで、処理 Note メタデータの有無が明確になり、コピー対象と SourceMap の内容が変わらない。
+  - _Depends: 17.1_
+  - _Requirements: 12.4, 12.6_
+  - _Boundary: VisualizeFunctionFlowUseCase, VisualizationView_
+
+- [x] 17.3 処理 Note をコンパクトかつテーマ対応の配色で描画する
+  - Mermaid Note の内側余白を `noteMargin: 12` へ更新し、メッセージ、participant、activation、control block の余白設定を維持する。
+  - 描画済み Note は処理 Note メタデータと Mermaid 出力行の対応だけで選択し、固定文言、画面上の距離、ネスト構造の子孫検索に依存しない。
+  - 処理 Note の背景・枠線・文字色には Dark / Light テーマでキャンバスと区別できるテーマ色と fallback 色を適用し、条件ラベル・フラグメント装飾を変更しない。
+  - Observable completion: 任意の処理文言を持つ処理 Note だけが、コンパクトな余白とキャンバス背景から識別できる配色で表示される。
+  - _Depends: 17.2_
+  - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
+  - _Boundary: Webview Mermaid_
+
+- [x] 17.4 処理 Note の意味的判定と実描画 SVG の回帰テストを追加する
+  - Renderer の単体テストで、異なる処理文言と FlowNode kind の組み合わせが同じ意味的な処理 Note メタデータになることを検証する。
+  - Mermaid を実描画した SVG fixture に、処理 Note、diagnostic・未解決 Note、ネストした制御ブロックを混在させ、処理 Note だけに背景・枠線・文字色が適用されることを検証する。
+  - Dark / Light の具体色 fixture で背景とキャンバスが異なることを確認し、`noteMargin: 12`、message・participant・activation・control block の余白設定、Mermaid text、SourceMap、Copy Mermaid、fallback、条件ラベル装飾の非干渉を検証する。
+  - Observable completion: 固定文字列だけを検索するテストを使わず、任意の処理文言と混在 Note を含む実 SVG で Requirement 12 の装飾・非干渉契約が確認できる。
+  - _Depends: 17.3_
+  - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
+  - _Boundary: MermaidRenderer tests, VisualizationView tests, Webview Mermaid tests_
+
+- [x] 17.5 処理 Note 改善の品質ゲートと表示検証を行う
+  - Dark / Light テーマで、`continue`、`break`、任意の式評価、長い処理文言、診断・未解決 Note を含む図の余白と配色を確認する。
+  - Mermaid text、Copy Mermaid、SourceMap、コードジャンプ、fallback、既存の条件ラベルおよびフラグメント装飾に回帰がないことを確認する。
+  - `npm run check-types`、`npm run lint`、`npm run compile`、`npm run test:unit`、`npm run test:integration`を実行する。
+  - Observable completion: Requirement 12 の表示確認と品質ゲートが成功し、既存の可視化契約が維持される。
+  - _Depends: 17.4_
+  - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6_
+  - _Boundary: Integration validation_

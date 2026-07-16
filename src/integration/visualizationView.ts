@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import type { VisualizationNotice, VisualizationResult } from '../application';
+import type { ProcessNoteNodeKind } from '../renderer';
 import { createWorkspaceTrustGuard, type WorkspaceTrustGuard } from './workspaceTrustPolicy';
 
 export type VisualizationWorkspaceTrustGuardProvider = () => Pick<WorkspaceTrustGuard, 'canShowVisualization' | 'canWriteClipboard' | 'visualizationRestrictedMessage'>;
@@ -17,6 +18,7 @@ export interface VisualizationViewModel {
 	readonly canCopyMermaid: boolean;
 	readonly notices: readonly VisualizationViewNotice[];
 	readonly sourceMap: readonly VisualizationSourceMapEntry[];
+	readonly processNoteDecorations: readonly VisualizationProcessNoteDecoration[];
 }
 
 export interface VisualizationViewNotice {
@@ -32,6 +34,11 @@ export interface VisualizationSourceMapEntry {
 	readonly nodeId?: string;
 	readonly edgeId?: string;
 	readonly sourceLocation: VisualizationSourceLocation;
+}
+
+export interface VisualizationProcessNoteDecoration {
+	readonly mermaidLine: number;
+	readonly nodeKind: ProcessNoteNodeKind;
 }
 
 export interface VisualizationSourceLocation {
@@ -221,6 +228,10 @@ export function createVisualizationViewModel(result: VisualizationResult, option
 				edgeId: entry.edgeId,
 				sourceLocation: entry.sourceLocation,
 			})),
+			processNoteDecorations: result.processNoteDecorations.map(decoration => ({
+				mermaidLine: decoration.mermaidLine,
+				nodeKind: decoration.nodeKind,
+			})),
 		};
 	}
 
@@ -231,6 +242,7 @@ export function createVisualizationViewModel(result: VisualizationResult, option
 		canCopyMermaid: false,
 		notices: result.notices.map(toViewNotice),
 		sourceMap: [],
+		processNoteDecorations: [],
 	};
 }
 
@@ -293,6 +305,9 @@ function renderHtml(model: VisualizationViewModel, nonce: string, viewId: string
 		'#diagram svg text.glitchlens-control-option,#diagram svg text.glitchlens-control-option tspan{fill:#fbcfe8!important;}',
 		'#diagram svg .glitchlens-control-option:is(rect,path,line,polygon){stroke:#fbcfe8!important;fill:#202732!important;stroke-width:1.8px!important;stroke-dasharray:none!important;}',
 		'#diagram svg text.loopText[class*="glitchlens-control-"],#diagram svg text.sectionTitle[class*="glitchlens-control-"]{transform:translateY(-18px)!important;}',
+		'#diagram svg g.glitchlens-process-note[data-et="note"]>rect{fill:#303b4d!important;stroke:var(--vscode-editorWidget-border,var(--vscode-panel-border,#6b7280))!important;}',
+		'@supports (fill:color-mix(in srgb,black,white)){#diagram svg g.glitchlens-process-note[data-et="note"]>rect{fill:color-mix(in srgb,var(--vscode-editor-background,#1e1e1e) 82%,var(--vscode-textLink-foreground,#4f86b8) 18%)!important;}}',
+		'#diagram svg g.glitchlens-process-note[data-et="note"] text,#diagram svg g.glitchlens-process-note[data-et="note"] tspan{fill:var(--vscode-editor-foreground,var(--vscode-foreground,#cccccc))!important;}',
 	].join('');
 	return [
 		'<!DOCTYPE html>',

@@ -54,7 +54,7 @@ try {
 			diagramMarginY: 10,
 			boxMargin: 22,
 			boxTextMargin: 12,
-			noteMargin: 20,
+			noteMargin: 12,
 			useMaxWidth: false,
 		},
 	});
@@ -103,6 +103,7 @@ async function renderMermaidDiagram() {
 		decorateSequenceParticipants(diagram);
 		decorateSequenceMessages(diagram);
 		decorateSequenceControls(diagram);
+		decorateProcessNotes(diagram);
 		document.body.dataset.render = 'mermaid';
 	} catch {
 		showFallback(diagram, mermaidText);
@@ -244,6 +245,34 @@ function decorateSequenceControls(diagram) {
 			continue;
 		}
 		styleControlConditionLabel(conditionLabel, CONTROL_CLASS_BY_KEYWORD[keyword], CONTROL_COLOR_BY_KEYWORD[keyword]);
+	}
+}
+
+function decorateProcessNotes(diagram) {
+	const decorations = Array.isArray(GLITCHLENS_VIEW_MODEL.processNoteDecorations)
+		? GLITCHLENS_VIEW_MODEL.processNoteDecorations
+		: [];
+	if (decorations.length === 0) {
+		return;
+	}
+	const lines = (GLITCHLENS_VIEW_MODEL.mermaidText ?? '').split(/\r?\n/);
+	const noteIndexesByLine = new Map();
+	let noteIndex = 0;
+	for (let index = 0; index < lines.length; index += 1) {
+		if (lines[index]?.trim().startsWith('Note ')) {
+			noteIndexesByLine.set(index + 1, noteIndex);
+			noteIndex += 1;
+		}
+	}
+	const noteGroups = [...diagram.querySelectorAll('svg g[data-et="note"]')];
+	for (const decoration of decorations) {
+		const noteIndexForLine = noteIndexesByLine.get(decoration.mermaidLine);
+		if (noteIndexForLine === undefined || noteIndexForLine >= noteGroups.length) {
+			continue;
+		}
+		const group = noteGroups[noteIndexForLine];
+		group.classList.add('glitchlens-process-note');
+		group.dataset.processNoteKind = decoration.nodeKind;
 	}
 }
 

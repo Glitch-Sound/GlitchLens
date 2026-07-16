@@ -570,6 +570,29 @@ suite('MermaidRenderer', () => {
 		assert.deepStrictEqual(result.warnings, []);
 	});
 
+	test('records process note decorations by FlowNode kind rather than note text', () => {
+		const model = createModel({
+			nodes: [
+				{ id: 'node:continue', kind: 'continue', order: 1, sourceLocation: location(2, 2, 2, 10), label: 'continue with custom label' },
+				{ id: 'node:expression', kind: 'expression', order: 2, sourceLocation: location(3, 2, 3, 20), expression: 'retryCount += step' },
+				call('node:unknown', 3, 'unknown', 'unknown'),
+			],
+			edges: [
+				edge('edge:continue', 'node:continue', 1),
+				edge('edge:expression', 'node:expression', 2),
+				edge('edge:unknown', 'node:unknown', 3),
+			],
+		});
+		const result = new MermaidRenderer().render(model);
+
+		assert.deepStrictEqual(result.processNoteDecorations.map(decoration => decoration.nodeKind), ['continue', 'expression']);
+		for (const decoration of result.processNoteDecorations) {
+			const lines = result.mermaidText.trimEnd().split('\n');
+			assert.strictEqual(lines[decoration.mermaidLine - 1].startsWith('Note over '), true);
+		}
+		assert.strictEqual(result.processNoteDecorations.length, 2);
+	});
+
 	test('returns Mermaid for partial models and warns about unrenderable edges without dropping renderable calls', () => {
 		const model = createModel({
 			nodes: [call('node:known', 1, 'known', 'resolved')],

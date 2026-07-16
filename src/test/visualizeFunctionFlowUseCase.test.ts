@@ -476,6 +476,7 @@ function cacheEntry(): ReturnType<AnalysisCache['get']> extends infer Entry | un
 			canCopyMermaid: true,
 			sourceMap: [],
 			notices: [],
+			processNoteDecorations: [],
 			completeness: 'complete',
 			model,
 		},
@@ -515,6 +516,7 @@ function renderResult(mermaidText: string, warnings: RenderResult['warnings'] = 
 		mermaidText,
 		warnings,
 		sourceMap: [],
+		processNoteDecorations: [],
 	};
 }
 

@@ -165,7 +165,7 @@ suite('VisualizationView', () => {
 		assert.ok(webviewSource.includes('diagramMarginX: 8'));
 		assert.ok(webviewSource.includes('diagramMarginY: 10'));
 		assert.ok(webviewSource.includes('boxMargin: 22'));
-		assert.ok(webviewSource.includes('noteMargin: 20'));
+		assert.ok(webviewSource.includes('noteMargin: 12'));
 		assert.ok(webviewSource.includes('useMaxWidth: false'));
 		assert.ok(!webviewSource.includes('useMaxWidth: true'));
 		assert.ok(webviewSource.includes('getComputedStyle(document.documentElement)'));
@@ -436,6 +436,30 @@ suite('VisualizationView', () => {
 		window.close();
 	});
 
+	test('decorates process notes from semantic metadata in an actual Mermaid SVG fixture', async () => {
+		const mermaidText = [
+			'sequenceDiagram',
+			'participant root as processOrders',
+			'Note over root: arbitrary expression result',
+			'root->>root: continue with any label',
+			'Note over root,unknown: unresolved arbitrary text',
+		].join('\n');
+		const { window, diagram } = await renderWebviewMermaidFixture(mermaidText, [
+			{ mermaidLine: 3, nodeKind: 'expression' },
+		]);
+		const noteGroups = [...diagram.querySelectorAll<SVGGElement>('svg g[data-et="note"]')];
+
+		assert.strictEqual(noteGroups.length, 2);
+		assert.strictEqual(noteGroups.filter(group => group.classList.contains('glitchlens-process-note')).length, 1);
+		const processNote = noteGroups.find(group => group.classList.contains('glitchlens-process-note'));
+		assert.ok(processNote);
+		assert.strictEqual(processNote?.dataset.processNoteKind, 'expression');
+		assert.strictEqual(window.getComputedStyle(processNote?.querySelector('rect') as Element).fill, 'rgb(48, 59, 77)');
+		assert.strictEqual(window.getComputedStyle(processNote?.querySelector('text') as Element).fill, 'var(--vscode-editor-foreground,var(--vscode-foreground,#cccccc))');
+
+		window.close();
+	});
+
 	test('reuses the same panel and replaces stale content safely', async () => {
 		const factory = new StubPanelFactory();
 		const adapter = new WebviewVisualizationAdapter(factory, new StubClipboard(), new StubNotification());
@@ -661,7 +685,7 @@ suite('VisualizationView', () => {
 	});
 });
 
-async function renderWebviewMermaidFixture(mermaidText: string) {
+async function renderWebviewMermaidFixture(mermaidText: string, processNoteDecorations: readonly { readonly mermaidLine: number; readonly nodeKind: string }[] = []) {
 	const bundle = await build({
 		entryPoints: [path.resolve(__dirname, '../../src/integration/webviewMermaid.js')],
 		bundle: true,
@@ -687,6 +711,7 @@ async function renderWebviewMermaidFixture(mermaidText: string) {
 			fallbackText: mermaidText,
 			cspNonce: 'test-nonce',
 			rootFunctionName: 'processOrders',
+			processNoteDecorations,
 		},
 	});
 	const nodeGlobals = globalThis as typeof globalThis & Record<string, unknown>;
@@ -736,6 +761,9 @@ function installControlDecorationStyles(document: Document): void {
 		'#diagram svg text.glitchlens-control-option,#diagram svg text.glitchlens-control-option tspan{fill:#fbcfe8!important;}',
 		'#diagram svg .glitchlens-control-option:is(rect,path,line,polygon){stroke:#fbcfe8!important;}',
 		'#diagram svg text.loopText[class*="glitchlens-control-"],#diagram svg text.sectionTitle[class*="glitchlens-control-"]{transform:translateY(-18px)!important;}',
+		'#diagram svg g.glitchlens-process-note[data-et="note"]>rect{fill:#303b4d!important;stroke:var(--vscode-editorWidget-border,var(--vscode-panel-border,#6b7280))!important;}',
+		'@supports (fill:color-mix(in srgb,black,white)){#diagram svg g.glitchlens-process-note[data-et="note"]>rect{fill:color-mix(in srgb,var(--vscode-editor-background,#1e1e1e) 82%,var(--vscode-textLink-foreground,#4f86b8) 18%)!important;}}',
+		'#diagram svg g.glitchlens-process-note[data-et="note"] text,#diagram svg g.glitchlens-process-note[data-et="note"] tspan{fill:var(--vscode-editor-foreground,var(--vscode-foreground,#cccccc))!important;}',
 	].join('');
 	document.head.append(style);
 }
@@ -864,6 +892,7 @@ function successResult(status: 'success' | 'partial', overrides: {
 		status,
 		mermaidText: overrides.mermaidText ?? 'sequenceDiagram\nroot->>load: load\n',
 		canCopyMermaid: true,
+		processNoteDecorations: [],
 		sourceMap: [{
 			elementId: 'line:1',
 			nodeId: 'node:load',

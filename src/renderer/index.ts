@@ -4,4 +4,6 @@ export {
 	type RendererWarning,
 	type RendererWarningKind,
 	type RenderSourceMapEntry,
+	type ProcessNoteDecoration,
+	type ProcessNoteNodeKind,
 } from './mermaidRenderer';
