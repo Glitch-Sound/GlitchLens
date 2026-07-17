@@ -162,10 +162,12 @@ suite('Extension Test Suite', () => {
 		const cursor = new vscode.Position(1, 2);
 		editor.selection = new vscode.Selection(cursor, cursor);
 		await vscode.commands.executeCommand(visualizeFunctionFlowCommandId);
-		await waitForProbeModel();
+		const displayedState = await waitForProbeModel();
+		const displayedMermaid = displayedState.lastModel?.mermaidText;
+		assert.ok(displayedMermaid?.includes('makeDiagram'));
 
 		await vscode.commands.executeCommand('glitchlens.test.copyCurrentMermaid');
-		assert.ok((await vscode.env.clipboard.readText()).includes('makeDiagram'));
+		assert.strictEqual(await vscode.env.clipboard.readText(), displayedMermaid);
 
 		const python = await vscode.workspace.openTextDocument({ language: 'python', content: 'def nope():\n    pass\n' });
 		await vscode.window.showTextDocument(python);

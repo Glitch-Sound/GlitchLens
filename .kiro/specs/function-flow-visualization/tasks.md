@@ -591,7 +591,7 @@
   - _Boundary: MermaidRenderer tests_
   - _Requirements: 16.7_
 
-- [ ] 22.3 先頭 Call の VS Code 表示・コピー統合を検証する
+- [x] 22.3 先頭 Call の VS Code 表示・コピー統合を検証する
   - cursor 実行、CodeLens 実行、Copy Mermaid の各経路で、関数先頭の Call が表示中とコピー対象の Mermaid text に含まれることを検証する。
   - 既存の partial result、SourceMap、コードジャンプ、Unknown / Unresolved、無題 root の表示契約に回帰がないことを確認する。
   - Observable completion: `fetchUser`、`firstCall`、`makeDiagram` を含む VS Code integration fixture が期待する Mermaid text とコピー内容を返す。
