@@ -128,7 +128,7 @@
   - _Boundary: PythonAnalyzer_
   - _Requirements: 2.2, 3.1, 3.2, 3.3, 4.1, 4.2, 6.1, 6.2, 6.3, 6.4, 6.6_
 
-- [ ] 10.2 Python の Await と終端表示を共通 edge 意味論へ合わせる
+- [x] 10.2 Python の Await と終端表示を共通 edge 意味論へ合わせる
   - Await node から Call へ進む実行順と、Return / Throw node がキーワードを除く式を保持する規則を実装する。
   - Await → Call と式中 Call → Return / Throw の順序を Flow Model と Mermaid fixture の両方で検証する。
   - **完了条件**: `await service.save()` が `await save` と表示され、`return build()` と `raise create_error()` がキーワード重複なしで描画され、各 Call が終端メッセージに先行する。

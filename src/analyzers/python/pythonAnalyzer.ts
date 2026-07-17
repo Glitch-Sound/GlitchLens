@@ -216,15 +216,19 @@ class PythonFlowBuilder {
 
 	private async extractTerminal(statement: SyntaxNode, kind: 'return' | 'throw'): Promise<void> {
 		await this.extractCalls(statement);
-		const node = this.addNode(kind, statement, this.text(statement));
+		const expression = this.text(statement).replace(/^\s*(?:return|raise)\b\s*/, '').trim();
+		const node = this.addNode(kind, statement, expression);
 		this.terminalNodeIds.add(node.id);
 	}
 
 	private async extractCalls(root: SyntaxNode): Promise<void> {
 		if (root.name === 'FunctionDefinition' || root.name === 'LambdaExpression') { return; }
 		if (root.name === 'AwaitExpression') {
+			// The await marker is an execution step that must precede the call it
+			// contains. Adding it first creates the Await -> Call edge used by the
+			// message formatter to prefix the operation with `await`.
+			this.addNode('await', root, this.text(root).replace(/^\s*await\b\s*/, '').trim());
 			for (const child of directChildren(root)) { if (child.name !== 'await') { await this.extractCalls(child); } }
-			this.addNode('await', root, this.text(root));
 			return;
 		}
 		if (root.name === 'CallExpression') {

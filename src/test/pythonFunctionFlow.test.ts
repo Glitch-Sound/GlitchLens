@@ -106,4 +106,55 @@ suite('Python function flow', () => {
 		assert.strictEqual(rendered.mermaidText.includes('option finally'), false);
 		assert.deepStrictEqual(rendered.warnings, []);
 	});
+
+	test('places await before its call and renders an awaited operation once', async () => {
+		const text = 'async def target(service):\n    await service.save()\n';
+		const result = await new PythonAnalyzer().analyze(input(text, text.indexOf('target')));
+		assert.strictEqual(result.status, 'success');
+		if (result.status !== 'success') { return; }
+		const awaitNode = result.model.nodes.find(node => node.kind === 'await');
+		const callNode = result.model.nodes.find(node => node.kind === 'call');
+		assert.ok(awaitNode && callNode);
+		if (!awaitNode || !callNode) { return; }
+		assert.ok(awaitNode.order < callNode.order);
+		assert.ok(result.model.edges.some(edge => edge.sourceNodeId === awaitNode.id && edge.targetNodeId === callNode.id));
+		const rendered = new MermaidRenderer().render(result.model);
+		assert.strictEqual((rendered.mermaidText.match(/await save/g) ?? []).length, 1);
+	});
+
+	test('keeps return and raise expressions keyword-free and orders calls before terminals', async () => {
+		const text = [
+			'def target():',
+			'    return build()',
+			'',
+			'def other():',
+			'    raise create_error()',
+		].join('\n');
+		const returnResult = await new PythonAnalyzer().analyze(input(text, text.indexOf('target')));
+		assert.strictEqual(returnResult.status, 'success');
+		if (returnResult.status !== 'success') { return; }
+		const returnCall = returnResult.model.nodes.find(node => node.kind === 'call');
+		const returnNode = returnResult.model.nodes.find(node => node.kind === 'return');
+		assert.ok(returnCall && returnNode);
+		if (!returnCall || !returnNode) { return; }
+		assert.ok(returnCall.order < returnNode.order);
+		assert.strictEqual(returnNode.expression, 'build()');
+		const returnRendered = new MermaidRenderer().render(returnResult.model);
+		assert.ok(returnRendered.mermaidText.includes('return build(...)'));
+		assert.strictEqual(returnRendered.mermaidText.includes('return return'), false);
+
+		const raiseOffset = text.indexOf('other');
+		const raiseResult = await new PythonAnalyzer().analyze(input(text, raiseOffset));
+		assert.strictEqual(raiseResult.status, 'success');
+		if (raiseResult.status !== 'success') { return; }
+		const raiseCall = raiseResult.model.nodes.find(node => node.kind === 'call');
+		const raiseNode = raiseResult.model.nodes.find(node => node.kind === 'throw');
+		assert.ok(raiseCall && raiseNode);
+		if (!raiseCall || !raiseNode) { return; }
+		assert.ok(raiseCall.order < raiseNode.order);
+		assert.strictEqual(raiseNode.expression, 'create_error()');
+		const raiseRendered = new MermaidRenderer().render(raiseResult.model);
+		assert.ok(raiseRendered.mermaidText.includes('throw create_error(...)'));
+		assert.strictEqual(raiseRendered.mermaidText.includes('throw raise'), false);
+	});
 });
