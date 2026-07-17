@@ -14,6 +14,23 @@ suite('TypeScriptAnalyzer static flow extraction', () => {
 		assert.deepStrictEqual(result.model.edges.map(edge => edge.executionOrder), result.model.edges.map((_, index) => index));
 	});
 
+	test('assigns class and instance participants and separates Array and fallback calls', async () => {
+		const result = await analyze(`function target(service, items, value) { service.load(); items.map(value); value?.run(); unknown[value](); }`, 'typescript', 30);
+		assert.ok(result.status === 'success' || result.status === 'partial');
+		if (result.status !== 'success' && result.status !== 'partial') {return;}
+		const calls = result.model.nodes.filter(node => node.kind === 'call');
+		const load = calls.find(node => node.calleeName === 'load');
+		const map = calls.find(node => node.calleeName === 'map');
+		const run = calls.find(node => node.calleeName === 'run');
+		const computed = calls.find(node => node.calleeName === '<unknown>');
+		assert.deepStrictEqual(load?.participant, { key: 'instance:service', label: 'service', kind: 'instance' });
+		assert.deepStrictEqual(map?.participant, { key: 'class:Array', label: 'Array', kind: 'class' });
+		assert.strictEqual(run?.resolution, 'unresolved');
+		assert.strictEqual(run?.participant?.key, 'unresolved');
+		assert.strictEqual(computed?.resolution, 'unknown');
+		assert.strictEqual(computed?.participant?.key, 'unknown');
+	});
+
 	test('extracts await calls, branches, loops, returns, throws, and try/catch/finally', async () => {
 		const result = await analyze(`async function target(value) {\n await load(value);\n if (value) { work(); } else { other(); }\n switch (value) { case 1: one(); break; default: two(); }\n for (const item of value) { visit(item); }\n for (;;) { tick(); break; }\n while (value) { wait(); }\n do { retry(); } while (value);\n try { risky(); return value; } catch (error) { recover(error); throw error; } finally { cleanup(); }\n}`, 'typescript', 30);
 	assert.strictEqual(result.status, 'success');

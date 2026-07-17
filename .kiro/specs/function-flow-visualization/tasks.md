@@ -550,7 +550,7 @@
   - _Boundary: Common Flow Model_
   - _Requirements: 16.2, 16.4, 16.5_
 
-- [ ] 21.2 TypeScript / JavaScript のクラス・インスタンス主体を抽出する
+- [x] 21.2 TypeScript / JavaScript のクラス・インスタンス主体を抽出する
   - 識別可能な receiver をクラスまたはインスタンスとして扱い、標準コレクション操作は `Array` への要求として扱う。
   - 直接呼び出し、chain call、computed call、optional call は主体名を推測せず、解決状態に対応する Unknown / Unresolved を維持する。
   - Observable completion: クラス、インスタンス、標準コレクション、各種未解決呼び出しの fixture が、要件どおりの主体と解決状態を返す。

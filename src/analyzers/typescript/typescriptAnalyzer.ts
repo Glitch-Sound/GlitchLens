@@ -431,7 +431,7 @@ class FlowBuilder {
 			if (this.isDynamicReceiver(expression.expression) && !collectionMethodNames.has(expression.name.text)) {
 				return { calleeName: expression.name.text, participant: fallbackParticipant('unresolved'), resolution: 'unresolved', message: `Call "${expression.name.text}" has a dynamic receiver and was kept unresolved.` };
 			}
-			return { calleeName: expression.name.text, participant: this.participantForReceiver(expression.expression), resolution: 'resolved', message: '' };
+			return { calleeName: expression.name.text, participant: this.participantForReceiver(expression.expression, expression.name.text), resolution: 'resolved', message: '' };
 		}
 		if (ts.isIdentifier(expression) || expression.kind === ts.SyntaxKind.SuperKeyword) {
 			return { calleeName: expression.getText(this.sourceFile), participant: fallbackParticipant('unknown'), resolution: 'resolved', message: '' };
@@ -439,7 +439,10 @@ class FlowBuilder {
 		return { calleeName: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Call target could not be named statically.' };
 	}
 
-	private participantForReceiver(receiver: ts.Expression): FlowParticipant {
+	private participantForReceiver(receiver: ts.Expression, methodName?: string): FlowParticipant {
+		if (methodName && collectionMethodNames.has(methodName)) {
+			return namedParticipant('class', 'Array');
+		}
 		const name = receiver.getText(this.sourceFile);
 		if (ts.isIdentifier(receiver)) {
 			return namedParticipant(/^[A-Z]/.test(name) ? 'class' : 'instance', name);
