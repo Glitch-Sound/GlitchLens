@@ -1,7 +1,9 @@
 import * as assert from 'assert';
 
-import { PythonAnalyzer, PythonFunctionLocator } from '../analyzers';
+import { PythonAnalyzer, PythonFunctionLocator, TypeScriptAnalyzer, TypeScriptFunctionLocator } from '../analyzers';
 import type { AnalyzerInput } from '../analyzers';
+import { AnalyzerRegistry, VisualizeFunctionFlowUseCase } from '../application';
+import { createVisualizationViewModel } from '../integration/visualizationView';
 import { MermaidRenderer } from '../renderer';
 
 function input(text: string, cursorOffset: number): AnalyzerInput {
@@ -156,5 +158,66 @@ suite('Python function flow', () => {
 		const raiseRendered = new MermaidRenderer().render(raiseResult.model);
 		assert.ok(raiseRendered.mermaidText.includes('throw create_error(...)'));
 		assert.strictEqual(raiseRendered.mermaidText.includes('throw raise'), false);
+	});
+
+	test('preserves the shared Mermaid, SourceMap, and view contract for Python', async () => {
+		const text = [
+			'async def process_orders(service, logger):',
+			'    await service.save()',
+			'    logger.error("failed")',
+			'    return build_result()',
+		].join('\n');
+		const source = { uri: 'file:///workspace/process_orders.py', languageId: 'python', version: 3, text } as const;
+		const candidate = new PythonFunctionLocator().findFunctionContainingOffset(source, text.indexOf('process_orders'));
+		assert.strictEqual(candidate.status, 'found');
+		if (candidate.status !== 'found') { return; }
+
+		const result = await new VisualizeFunctionFlowUseCase(
+			new AnalyzerRegistry([new PythonAnalyzer()]),
+			new MermaidRenderer(),
+		).execute({
+			source,
+			cursorOffset: text.indexOf('process_orders'),
+			functionRange: candidate.function.range,
+			configuration: { configurationDigest: 'python-contract' },
+			cancellation: { isCancellationRequested: false },
+		});
+
+		assert.strictEqual(result.status, 'success');
+		if (result.status !== 'success') { return; }
+		assert.strictEqual(result.canCopyMermaid, true);
+		assert.strictEqual(result.mermaidText, new MermaidRenderer().render(result.model).mermaidText);
+		assert.ok(result.mermaidText.includes('participant service as service'));
+		assert.ok(result.mermaidText.includes('participant logger as logger'));
+		assert.ok(result.mermaidText.includes('await save'));
+		assert.ok(result.mermaidText.includes('return build_result(...)'));
+		assert.ok(result.sourceMap.length > 0);
+		assert.ok(result.sourceMap.every(entry => entry.sourceLocation.uri === source.uri));
+
+		const view = createVisualizationViewModel(result);
+		assert.strictEqual(view.mermaidText, result.mermaidText);
+		assert.strictEqual(view.fallbackText, result.mermaidText);
+		assert.deepStrictEqual(view.sourceMap, result.sourceMap);
+
+		const tsText = 'async function process_orders(service: Service) {\n  await service.save();\n  return build_result();\n}';
+		const tsSource = { uri: 'file:///workspace/process_orders.ts', languageId: 'typescript', version: 3, text: tsText } as const;
+		const tsCandidate = new TypeScriptFunctionLocator().findFunctionContainingOffset(tsSource, tsText.indexOf('process_orders'));
+		assert.strictEqual(tsCandidate.status, 'found');
+		if (tsCandidate.status !== 'found') { return; }
+		const tsResult = await new VisualizeFunctionFlowUseCase(
+			new AnalyzerRegistry([new TypeScriptAnalyzer()]),
+			new MermaidRenderer(),
+		).execute({
+			source: tsSource,
+			cursorOffset: tsText.indexOf('process_orders'),
+			functionRange: tsCandidate.function.range,
+			configuration: { configurationDigest: 'typescript-contract' },
+			cancellation: { isCancellationRequested: false },
+		});
+		assert.strictEqual(tsResult.status, 'success');
+		if (tsResult.status !== 'success') { return; }
+		assert.ok(tsResult.mermaidText.includes('participant service as service'));
+		assert.ok(tsResult.mermaidText.includes('await save'));
+		assert.ok(tsResult.mermaidText.includes('return build_result(...)'));
 	});
 });

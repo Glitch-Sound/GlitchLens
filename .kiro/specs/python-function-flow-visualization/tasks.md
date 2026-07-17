@@ -136,7 +136,7 @@
   - _Depends: 10.1_
   - _Requirements: 2.3, 2.8, 3.1, 3.3, 5.5_
 
-- [ ] 11. Python と既存言語の描画契約を回帰検証する
+- [x] 11. Python と既存言語の描画契約を回帰検証する
   - participant 集約、Unknown / Unresolved、Await、Return / Throw、Mermaid text、Clipboard、SourceMap、Analyzer version による cache miss を Python と既存言語で検証する。
   - CodeLens、Workspace Trust、部分結果、ローカル静的解析境界を含む既存の統合経路が Python の変換変更後も維持されることを確認する。
   - **完了条件**: Python と TypeScript / JavaScript の unit・integration 品質ゲートが成功し、Python 専用 Renderer / WebView 分岐を追加せずに図とコピー結果が一致する。
