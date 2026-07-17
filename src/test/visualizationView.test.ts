@@ -50,6 +50,25 @@ suite('VisualizationView', () => {
 		]);
 	});
 
+	test('preserves Mermaid text, SourceMap, process order, and partial notices for integration display', () => {
+		const mermaidText = 'sequenceDiagram\nparticipant root as \nroot->>service: load\nNote over root: break\n';
+		const model = createVisualizationViewModel(successResult('partial', {
+			mermaidText,
+			sourceMap: [{ elementId: 'line:3', nodeId: 'node:load', edgeId: 'edge:load', sourceLocation: testSourceLocation() }],
+			processNoteDecorations: [{ mermaidLine: 4, nodeKind: 'break' }],
+			notices: [notice('order-uncertain', 'warning', 'Execution order is uncertain.')],
+		}));
+
+		assert.strictEqual(model.state, 'partial');
+		assert.strictEqual(model.mermaidText, mermaidText);
+		assert.strictEqual(model.fallbackText, mermaidText);
+		assert.deepStrictEqual(model.sourceMap[0], {
+			elementId: 'line:3', nodeId: 'node:load', edgeId: 'edge:load', sourceLocation: testSourceLocation(),
+		});
+		assert.deepStrictEqual(model.processNoteDecorations, [{ mermaidLine: 4, nodeKind: 'break' }]);
+		assert.strictEqual(model.notices[0].kind, 'order-uncertain');
+	});
+
 	test('uses fallback mode when Mermaid text is absent or render fallback is requested', () => {
 		const failedMermaid = createVisualizationViewModel(successResult('success'), { forceFallback: true });
 		const failure = createVisualizationViewModel(failureResult('failed'));
@@ -901,13 +920,15 @@ class StubNotification implements VisualizationViewNotification {
 function successResult(status: 'success' | 'partial', overrides: {
 	readonly mermaidText?: string;
 	readonly notices?: VisualizationResult['notices'];
+	readonly sourceMap?: Extract<VisualizationResult, { status: 'success' | 'partial' }>['sourceMap'];
+	readonly processNoteDecorations?: Extract<VisualizationResult, { status: 'success' | 'partial' }>['processNoteDecorations'];
 } = {}): VisualizationResult {
 	return {
 		status,
 		mermaidText: overrides.mermaidText ?? 'sequenceDiagram\nroot->>load: load\n',
 		canCopyMermaid: true,
-		processNoteDecorations: [],
-		sourceMap: [{
+		processNoteDecorations: overrides.processNoteDecorations ?? [],
+		sourceMap: overrides.sourceMap ?? [{
 			elementId: 'line:1',
 			nodeId: 'node:load',
 			sourceLocation: {
@@ -982,6 +1003,13 @@ function noticeWithLocation(
 	edgeId?: string,
 ): VisualizationResult['notices'][number] {
 	return { ...notice(kind, severity, message), nodeId, edgeId };
+}
+
+function testSourceLocation() {
+	return {
+		uri: 'file:///workspace/source.ts',
+		range: { start: { line: 2, character: 2 }, end: { line: 2, character: 14 } },
+	};
 }
 
 function assertNoForbiddenModelObjects(value: VisualizationViewModel): void {

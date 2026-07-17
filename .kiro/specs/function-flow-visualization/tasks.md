@@ -566,7 +566,7 @@
   - _Boundary: MermaidRenderer_
   - _Requirements: 14.2, 16.1, 16.3, 16.4, 16.5, 16.6_
 
-- [ ] 21.4 ライフラインの表示・コピー統合を回帰検証する
+- [x] 21.4 ライフラインの表示・コピー統合を回帰検証する
   - 表示中とコピーされた Mermaid text が一致し、SourceMap、コードジャンプ、部分解析、処理順、未解決通知を維持する。
   - 既存の await、return、diagnostic、UI 操作へ回帰がないことを確認する。
   - Observable completion: VisualizationView と ClipboardAdapter の統合テストで、ライフライン表示とコピーの一致、および既存の追跡・部分結果契約を確認できる。
