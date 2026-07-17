@@ -3,46 +3,51 @@
 ## Summary
 
 - **Feature**: python-function-flow-visualization
-- **Discovery Scope**: Extension
+- **Discovery Scope**: Extension（軽量統合調査）
 - **Key Findings**:
-  - Python の既存 Analyzer は `MemberExpression` の receiver を破棄して最後のメソッド名だけを `calleeName` へ保存している。
-  - 共通 Renderer は `calleeName` を participant label と同一視しているため、Python 専用表示ではなく共通 Flow Model contract の変更が必要である。
-  - `@lezer/python`、既存の SourceLocation、MermaidRenderer を使えば、新規依存や実行時型解決なしに主体名候補を扱える。
+  - Python Analyzer は Call の `calleeName` だけを生成し、`participant` を供給していないため、共通 Renderer では resolved call も `Unknown` に集約される。
+  - Python の Await は Call の後に node を置いており、既存 Renderer が Await → Call edge で判定する `await` message 表示と一致しない。
+  - Python の Return / Throw はキーワードを含む全文を保持しており、共通 formatter によるキーワード付与と重複する可能性がある。
 
 ## Research Log
 
-### Python call extraction and common rendering
+### TypeScript と Python の共通描画契約
 
-- **Context**: Requirement 6 により、Python のライフラインを関数名ではなく責務主体として表示する必要がある。
-- **Sources Consulted**: `src/analyzers/python/pythonAnalyzer.ts`、`src/flow-model/flowNode.ts`、`src/flow-model/flowModel.ts`、`src/renderer/mermaidRenderer.ts`、`src/test/pythonFunctionFlow.test.ts`
+- **Sources Consulted**: `src/analyzers/python/pythonAnalyzer.ts`、`src/analyzers/typescript/typescriptAnalyzer.ts`、`src/flow-model/flowParticipant.ts`、`src/flow-model/flowNode.ts`、`src/renderer/mermaidRenderer.ts`、`src/test/pythonFunctionFlow.test.ts`、`src/test/typescriptFlowExtractor.test.ts`
 - **Findings**:
-  - Python の Name と MemberExpression は receiver / class / module 候補を構文から得られるが、現状は `calleeName` だけへ縮約している。
-  - 共通 Renderer は root function 名と call の `calleeName` を participant に使い、異なる主体の同名メソッドも統合する。
-  - Source URI の basename は、クラスや receiver を特定できない場合の module fallback 候補になる。
+  - TypeScript Analyzer は単一 identifier receiver を participant に変換し、先頭大文字を class、それ以外を instance とする。直接 Call は操作名を保持する一方、participant は `Unknown` を使う。
+  - MermaidRenderer は participant key でライフラインを集約し、Call の incoming edge の source が Await の場合にだけ `await ` を付与する。Return / Throw のキーワードも renderer 側で付与する。
+  - Python Analyzer の現行 Call は participant 未設定で、`results.append()` と `logger.error()` のような別 receiver が同じ Unknown ライフラインになる。Await / Return / Throw の node 内容と edge 順序も renderer の前提と一致しない。
 - **Implications**:
-  - Python Analyzer は AST 型を公開せず、共通 `FlowParticipant` の plain data を生成する。
-  - participant label の重複排除は Python Analyzer ではなく共通 Renderer が key に基づいて担う。
+  - 修正責務は Python Analyzer の Common Flow Model 変換とその test に閉じ、Renderer / WebView に言語分岐を追加しない。
+  - 不明な主体は source URI、モジュール名、enclosing class で補完せず、共通の Unknown / Unresolved を使う。
 
 ## Design Decisions
 
-### Decision: Python は共通 participant contract だけを供給する
+### Decision: Python は既存 FlowParticipant と edge 意味論を供給する
 
 - **Alternatives Considered**:
-  1. Python WebView に専用の participant 表示規則を追加する。
-  2. Python Analyzer がメソッド名だけを出力し、Renderer が文字列を推測する。
-  3. Python Analyzer が共通 `FlowParticipant` を出力し、共通 Renderer がすべての言語を同じ規則で描画する。
+  1. Python 専用の MermaidRenderer / WebView 表示規則を追加する。
+  2. Renderer が Python の `calleeName` や source URI から participant を推測する。
+  3. Python Analyzer が既存 `FlowParticipant` と Await / terminal の edge 意味論を出力する。
 - **Selected Approach**: 3 を採用する。
-- **Rationale**: Common Flow Model first と Renderer independence を維持し、Python 固有の UI 分岐を増やさない。
-- **Trade-offs**: Python の動的 receiver は完全に同定しないため、Unknown / Unresolved へ明示的にフォールバックする。
-- **Follow-up**: MemberExpression、クラスメソッド、top-level function、chain call の fixture を追加して優先順位を検証する。
+- **Rationale**: Common Flow Model first と Renderer independence を維持し、同一 Mermaid text が表示と Clipboard で再利用される既存契約を保てる。
+- **Trade-offs**: Python の動的 receiver は完全に同定しない。表示情報を推測する代わりに Unknown / Unresolved と diagnostic を残す。
+
+### Synthesis
+
+- **Generalization**: participant、awaited-call、terminal label は言語別 UI の問題ではなく、Analyzer が満たす共通 Flow Model contract の問題である。
+- **Build vs. Adopt**: 新規ライブラリは導入しない。既存の `@lezer/python`、FlowParticipant、MermaidRenderer を使用する。
+- **Simplification**: 新しい adapter、participant 種別、Renderer 分岐、型推論は追加しない。PythonAnalyzer と既存 test fixture の変更に限定する。
 
 ## Risks & Mitigations
 
-- receiver をクラス名と誤認するリスク — 構文上の候補だけを instance / role として保持し、型名を推測しない。
-- module fallback が過度に適用されるリスク — target source がない場合の caller source 利用をテストで固定し、Unknown / Unresolved の条件を明示する。
-- 共通 contract 変更が既存言語へ波及するリスク — TypeScript / JavaScript / Python の Renderer と clipboard 回帰を同じ test suite で確認する。
+- participant を class / instance と誤認するリスク — 単一識別子だけを静的候補にし、chain / computed / dynamic receiver はフォールバックする。
+- Await の edge 変更が実行順を壊すリスク — node order、Await → Call edge、Mermaid message、SourceMap を同じ fixture で検証する。
+- terminal label の修正が既存表示を壊すリスク — Return / Throw の式と message を個別に検証し、TypeScript Renderer 回帰を維持する。
+- Analyzer version 更新漏れのリスク — parser / 変換意味論の変更では既存 cache key の analyzer version を更新する。
 
 ## References
 
-- [Lezer Python](https://github.com/lezer-parser/python) — Python 構文木の既存解析基盤
-- [Mermaid Sequence Diagram](https://mermaid.js.org/syntax/sequenceDiagram.html) — participant と message の表示構文
+- [Lezer Python](https://github.com/lezer-parser/python) — Python 構文解析の既存基盤
+- [Mermaid Sequence Diagram](https://mermaid.js.org/syntax/sequenceDiagram.html) — 既存 Renderer が出力するシーケンス図構文

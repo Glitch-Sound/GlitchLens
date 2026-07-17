@@ -19,6 +19,32 @@ Python Function Flow Visualization は、既存の GlitchLens の静的処理フ
 - 呼び出し先関数本体への再帰解析。
 - 既存 Renderer、WebView、Mermaid 表現、コピー、ズーム UI の Python 専用変更。
 
+## Boundary Commitments
+
+### This Spec Owns
+
+- Python の Call に、既存の `FlowParticipant` と `calleeName` の共通契約を供給し、TypeScript と同じライフライン名・操作名・集約規則を成立させる。
+- Python の Await、Return、Throw を既存 Renderer が同じ Mermaid 表示へ変換できる node と edge の順序で出力する。
+- 上記の Python 固有変換と、Python / TypeScript の共通 Renderer 回帰テストを更新する。
+
+### Out of Boundary
+
+- `FlowParticipant`、MermaidRenderer、WebView、Clipboard、SourceMap の公開契約または Python 専用表示分岐の変更。
+- Python の型推論、import 解決、実行時 receiver・descriptor・`__call__` の同定。
+- モジュール名、パッケージ名、ファイル名、enclosing class 名を不明な主体の代替ライフラインとして推測すること。
+
+### Allowed Dependencies
+
+- `src/analyzers/python/pythonParser.ts` が公開する Python 構文走査境界。
+- `FlowParticipant`、`FlowCallNode`、FlowEdge、MermaidRenderer、および既存の TypeScript Analyzer の静的分類規則。
+- 既存の unit / integration test と AnalysisCache の analyzer version 契約。
+
+### Revalidation Triggers
+
+- FlowParticipant の key・label・kind、Call participant の任意性、または Renderer の participant 集約規則を変更する場合。
+- Await の判定 edge、Return / Throw の表示規則、SourceMap、または message formatter を変更する場合。
+- Python parser の MemberExpression / CallExpression の形状、または TypeScript の静的 receiver 分類規則を変更する場合。
+
 ## Architecture
 
 ### Dependency Direction
@@ -149,19 +175,19 @@ export class PythonAnalyzer implements LanguageAnalyzer {
 | Python construct | Flow Model | Extraction and edges |
 |---|---|---|
 | `def` / `async def` | `rootFunction` | name と function range を記録する。`async` 自体の node は作らない。 |
-| `call()` | `call` | Name は `resolved`。入れ子の call は、子の評価を親の call より先に、静的に推定できる実行順で抽出する。 |
-| `object.method()` | `call` | method 名を `calleeName` とする。receiver が静的に単純な Name / Attribute の場合は既存 TS と同じ「命名可能」な `resolved` とする。 |
+| `call()` | `call` | `calleeName` は操作名を保持し、participant は `Unknown` とする。入れ子の call は、子の評価を親の call より先に、静的に推定できる実行順で抽出する。 |
+| `object.method()` | `call` | receiver が単一の識別子の場合だけ、method 名を `calleeName`、receiver を既存 TS と同じ class / instance participant とする。 |
 | `factory().run()` | `call` | `run` は動的 receiver のため `unresolved`、diagnostic を付与する。内側の `factory` call は別 node とする。 |
 | `items[index]()` / `getattr(...)()` / 不明な callable | `call` | `calleeName: '<unknown>'`、`unknown` または `unresolved` と diagnostic を付与する。 |
-| `await expression` | `await` | 式中の call を評価順で抽出した後に await node を作る。 |
+| `await expression` | `await` | Await node を式中の call より先に作り、Await から Call への edge を持たせる。これにより既存 Renderer はメッセージを `await <操作名>` と一度だけ表示する。 |
 | assignment / annotated assignment | right-hand expression only | Lezer の `AssignStatement` を対象とする。代入先は FlowNode に変換せず、`AssignOp` より後の右辺にある Call / Await を評価順で抽出する。呼び出しがない代入は diagnostic なしで通過する。 |
 | augmented assignment | right-hand expression only | Lezer の `UpdateStatement` を対象とする。`UpdateOp` より後の右辺にある Call / Await だけを評価順で抽出し、`retry += 1` のように呼び出しがない更新は diagnostic なしで通過する。右辺の動的 callable は既存の `unknown` / `unresolved` と partial analysis 規則を適用する。 |
 | `if` / `elif` / `else` | `branch` | `if` を branch、then を `true`、else / elif を `false` edge とする。`elif` は false 側の入れ子 branch として表現する。表示ラベルには body を含めず条件式だけを保持する。 |
 | `for` / `while` | `loop` | loop body を `loop-body`、後続を loop node 起点の `loop-exit` edge で結ぶ。条件・iterable 内の call を body より前に抽出し、表示ラベルには body を含めないヘッダだけを保持する。 |
 | `try` / `except` / `finally` | `try-catch` | try / catch / finally edge を使う。`except ... as error` の binding を `catchBinding` に記録する。 |
 | `with expr as name` | expression + body | 複数の context expression を左から右の評価順で抽出し、その後に body を処理する。`__enter__` / `__exit__` の暗黙呼び出しは推測しない。 |
-| `return expr` | `return` | expr 内の call を return node より前に抽出し、return node を terminal とする。 |
-| `raise expr` | `throw` | expr 内の call を throw node より前に抽出し、throw node を terminal とする。 |
+| `return expr` | `return` | expr 内の call を return node より前に抽出し、node にはキーワードを除く式だけを保持して terminal とする。 |
+| `raise expr` | `throw` | expr 内の call を throw node より前に抽出し、node にはキーワードを除く式だけを保持して terminal とする。 |
 | `break` / `continue` | `break` / `continue` | `break` から loop 後の最初の到達可能 node へ `break-exit` edge を、`continue` から loop node へ `continue-loop` edge を作る。通常の `next` edge は作らない。 |
 
 `for ... else`、`while ... else`、`try ... else` は初期スコープで誤った到達可能性を描かないため、該当節を `unsupported-syntax` diagnostic として扱い、前後で解析可能な statement を保持する。`match`、`yield`、`yield from` も同じ partial-analysis 方針とする。
@@ -347,68 +373,72 @@ npm run package
 - Python 以外の追加言語が locator registry と parser dependency の選択へ影響する場合。
 - package / esbuild が JavaScript bundle 以外の asset または native binary を要求する場合。
 
-## Requirement 6 Design Update: Python ライフライン主体名
-
-### Boundary Commitments
-
-**This Spec Owns**
-
-- Python 構文から、共通 `FlowParticipant` に渡すインスタンス、クラス、役割、および module fallback 候補を抽出すること。
-- Python の Call と root function が共通 Requirement 16 の participant priority と Unknown / Unresolved 規則に従うこと。
-- Python 固有の participant extraction に対する fixture と回帰検証。
-
-**Out of Boundary**
-
-- Python の型推論、import の完全解決、実行時 object / descriptor / `__call__` の同定。
-- Python 専用の Mermaid syntax、WebView 表示処理、Clipboard 経路、または SourceMap 形式。
-
-**Allowed Dependencies**
-
-- `@lezer/python` の Name、MemberExpression、class declaration、source range。
-- 共通 `FlowParticipant` contract、SourceLocation URI、MermaidRenderer。
-
-**Revalidation Triggers**
-
-- Python parser の node 名または class / member expression の構造が変わる場合。
-- 共通 participant priority、label format、key の意味、Unknown / Unresolved の表示を変える場合。
-- Python source URI から module name を導出する規則を変更する場合。
+## Python と TypeScript の描画契約更新
 
 ### Architecture Decision
 
-`PythonFlowBuilder` は `calleeName` を操作名として保持しつつ、MemberExpression の左側 Name を instance / role 候補として `FlowParticipant` に変換する。クラス内の root function は enclosing class 名を優先し、top-level function と主体候補のない Call は source URI から導く `: <module>` を使用する。動的な `factory().run()`、index access、`getattr`、または source URI も得られない Call は、既存 resolution に従って `: Unresolved` または `: Unknown` を使う。
+`PythonFlowBuilder` は Call ごとに、操作名と主体を別々に生成する。単一識別子 receiver の `service.save()` は `instance:service`、`ClassName.build()` は `class:ClassName` を participant とし、`calleeName` はそれぞれ `save`、`build` とする。直接呼び出し `foo()`、chain call `factory().run()`、添字・動的属性アクセスは、モジュール名等で補完せず、既存の resolution に対応する `Unknown` または `Unresolved` participant を用いる。
 
-この処理は parser adapter と Analyzer の内側に閉じ、Lezer node や Python 固有型を Common Flow Model、Renderer、WebView へ渡さない。共通 Renderer が participant key で集約するため、Python は言語専用の表示ロジックを持たない。
+Await は Await node を先に置き、Await から式中の Call への edge を構築する。Return / Throw node はキーワードを除いた式だけを保持する。これらは既存 MermaidRenderer の message formatter と awaited-call 判定をそのまま利用して、`await save`、`return value`、`throw error` を一度だけ出力するための契約である。
+
+```mermaid
+flowchart LR
+    PythonSyntax[Python Call / Await / Return / Raise] --> PythonAnalyzer
+    PythonAnalyzer --> FlowCall[FlowCallNode: participant + calleeName]
+    PythonAnalyzer --> FlowControl[Await / Return / Throw nodes and edges]
+    FlowCall --> MermaidRenderer
+    FlowControl --> MermaidRenderer
+    MermaidRenderer --> MermaidText[Diagram and copied Mermaid text]
+```
 
 ### Python Participant Extraction Contract
 
-| Python source form | Participant candidate | Operation message | Fallback |
+| Python source form | participant | operation message | resolution / diagnostic |
 |---|---|---|---|
-| `service.save()` | `service` instance / role | `save` | source module |
-| `ClassName.build()` | `ClassName` class | `build` | source module |
-| class method `def run` | enclosing class | operation names in body | source module |
-| `foo()` | source module | `foo` | Unknown when source is unavailable |
-| `factory().run()` | no reliable candidate | `run` | Unresolved |
-| `items[index]()` / `getattr(...)()` | no reliable candidate | existing safe operation name or unknown call | Unknown / Unresolved |
+| `service.save()` | `instance:service` | `save` | resolved |
+| `ClassName.build()` | `class:ClassName` | `build` | resolved |
+| `foo()` | `unknown` | `foo` | resolved、主体は推測しない |
+| `factory().run()` | `unresolved` | `run` | unresolved diagnostic |
+| `items[index]()` / `getattr(...)()` | `unknown` または `unresolved` | 安全に得られる操作名、または `<unknown>` | 対応する diagnostic |
+
+participant key は既存の共通 Renderer が重複排除する。同一 key の操作は一つのライフラインに集約され、異なる key の同名操作は分離される。Python は participant の表示名を renderer で推測させず、Python 専用の Renderer / WebView 分岐も追加しない。
 
 ### File Structure Impact
 
-- `src/analyzers/python/pythonAnalyzer.ts` — source form と enclosing class を読み、Call / root に共通 participant candidate を設定する。
-- `src/flow-model/flowParticipant.ts`、`src/flow-model/flowModel.ts`、`src/flow-model/flowNode.ts` — 共通仕様が定める participant data を利用する。
-- `src/test/pythonFunctionFlow.test.ts` — instance、class、module、Unknown / Unresolved の優先順位と操作名を検証する。
-- `src/test/mermaidRenderer.test.ts`、`src/test/visualizationView.test.ts` — Python Flow Model でも共通 participant title、Mermaid copy、SourceMap が一致することを検証する。
+- `src/analyzers/python/pythonAnalyzer.ts` — Python Call から participant と `calleeName` を分離し、Await / Return / Throw の node と edge の順序を共通 Renderer 契約へ合わせる。
+- `src/test/pythonFunctionFlow.test.ts` — participant key / label、同一主体の集約、異なる主体の分離、Unknown / Unresolved、await / return / throw の Mermaid 出力を検証する。
+- `src/test/mermaidRenderer.test.ts` — Python Flow Model で既存 participant 集約、SourceMap、コピー対象 Mermaid の契約を回帰検証する。
+- `src/test/typescriptFlowExtractor.test.ts` — Python の変更が参照する TypeScript 静的 receiver 分類・await表示の基準を回帰検証する。
 
 ### Requirements Traceability Amendment
 
 | Requirement | Design response |
 |---|---|
-| 6.1 | Python Name / MemberExpression と enclosing class から共通 FlowParticipant を生成する。 |
-| 6.2 | SourceLocation URI から `: <module>` を導出する。 |
-| 6.3 | dynamic call は共通 key の Unknown / Unresolved へ集約する。 |
-| 6.4 | `calleeName` を引数なしの操作 message として維持する。 |
-| 6.5 | Python 専用 Renderer / WebView 分岐を追加せず、共通 Renderer contract を使用する。 |
+| 2.2 | Python の nested Call は既存の静的実行順で生成する。 |
+| 2.3 | Await node を Call の前に置き、Await → Call edge により `await <操作名>` を既存 Renderer へ伝える。 |
+| 2.8 | Return / Throw node はキーワードを除く式を保持し、終端前に式中 Call を接続する。 |
+| 4.1–4.2 | 動的 receiver は既存の Unknown / Unresolved participant と diagnostic へフォールバックする。 |
+| 5.5 | Python 固有の描画分岐を追加せず、TypeScript / JavaScript の Renderer 回帰を実行する。 |
+| 6.1 | 単一識別子 receiver を、先頭大文字は class、それ以外は instance の participant とする。 |
+| 6.2 | participant key による既存 Renderer 集約を利用する。 |
+| 6.3 | `calleeName` は引数・receiver・モジュール名を含まない操作名とする。 |
+| 6.4 | 主体を識別できない呼び出しは推測せず Unknown / Unresolved へ集約する。 |
+| 6.5–6.6 | 無題 root、Mermaid 表示・コピー、および Python 固有表示規則を追加しない共通 Renderer 契約を維持する。 |
 
 ### Testing Strategy Amendment
 
-- `pythonFunctionFlow.test.ts` で `service.save()`、class method、top-level `foo()`、`factory().run()`、computed / `getattr` を解析し、participant kind / label と operation name を確認する。
-- 共通 Renderer fixture で、Python の同一 participant が集約され、異なる participant の同名 operation が分離され、Unknown / Unresolved が各一つであることを確認する。
-- 既存の `process_orders` fixture を participant contract 付きで再検証し、実行順、diagnostic、SourceMap、Mermaid text のコピーが維持されることを確認する。
+- `pythonFunctionFlow.test.ts` で `results.append()` と `logger.error()` が別 participant、同一 receiver の複数操作が一つの participant、異なる receiver の同名 `save()` が別 participant となることを検証する。
+- `await service.save()` と入れ子 call を含む await で、実行順、`await save` message、SourceMap を検証する。
+- `return build()` と `raise create_error()` が、キーワードを二重に出力せず、Call が終端メッセージに先行することを検証する。
+- direct / chain / computed / dynamic call の Unknown / Unresolved 表示、diagnostic、Mermaid text と Clipboard の一致を検証する。
+
+### 完全な要件トレーサビリティ
+
+| Requirement | Components / validation |
+|---|---|
+| 1.1, 1.2, 1.3, 1.4, 1.5 | PythonFunctionLocator、FunctionLocatorRegistry、CodeLens integration と locator unit test |
+| 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 2.11, 2.12 | PythonAnalyzer、PythonFlowBuilder、FlowModel mapping、control-flow / Mermaid unit test |
+| 3.1, 3.2, 3.3, 3.4, 3.5 | Python parser adapter、LanguageAnalyzer contract、FlowModel language ID、共通 Renderer regression |
+| 4.1, 4.2, 4.3, 4.4, 4.5 | call resolution policy、partial result / diagnostic policy、Visualization integration test |
+| 5.1, 5.2, 5.3, 5.4, 5.5, 5.6 | safety boundary、cancellation、AnalysisCache、Workspace Trust、cross-language regression |
+| 6.1, 6.2, 6.3, 6.4, 6.5, 6.6 | Python participant extraction contract、MermaidRenderer、pythonFunctionFlow / Renderer regression test |
