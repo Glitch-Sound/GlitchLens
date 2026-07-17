@@ -2,11 +2,11 @@ import ts from 'typescript';
 
 import type { AnalyzerInput, AnalyzerResult, LanguageAnalyzer } from '../languageAnalyzer';
 import { findFunctionContainingOffset, type FunctionCandidate } from './functionLocator';
-import type { FlowDiagnostic, FlowEdge, FlowNode, FlowModel, FlowFunction, SourceLocation } from '../../flow-model';
+import { fallbackParticipant, moduleParticipant, namedParticipant, type FlowDiagnostic, type FlowEdge, type FlowNode, type FlowModel, type FlowFunction, type FlowParticipant, type SourceLocation } from '../../flow-model';
 
 export class TypeScriptAnalyzer implements LanguageAnalyzer {
 	public readonly id = 'typescript';
-	public readonly version = '0.4.0';
+	public readonly version = '0.6.0';
 	public readonly languageIds = ['typescript', 'javascript', 'typescriptreact', 'javascriptreact'] as const;
 
 	public async analyze(input: AnalyzerInput): Promise<AnalyzerResult> {
@@ -105,10 +105,10 @@ class FlowBuilder {
 
 	public model(): FlowModel {
 		const languageId = this.input.source.languageId as TypeScriptAnalyzer['languageIds'][number];
-		const rootFunction: FlowFunction = { id: `function:${this.candidate.range.startOffset}`, name: this.candidate.name, sourceLocation: this.location(this.candidate.range.startOffset, this.candidate.range.endOffset, this.candidate.name) };
+		const rootFunction: FlowFunction = { id: `function:${this.candidate.range.startOffset}`, name: this.candidate.name, participant: this.participantForRoot(), sourceLocation: this.location(this.candidate.range.startOffset, this.candidate.range.endOffset, this.candidate.name) };
 		const edges = this.orderedEdges();
 		return {
-			metadata: { schemaVersion: '1.0.0', analyzerId: 'typescript', analyzerVersion: '0.4.0', languageId, generatedAt: new Date().toISOString(), sourceDocumentVersion: this.input.source.version, completeness: this.completeness, configurationDigest: this.input.configuration.configurationDigest, rootFunctionIdentifier: rootFunction.id },
+			metadata: { schemaVersion: '1.0.0', analyzerId: 'typescript', analyzerVersion: '0.6.0', languageId, generatedAt: new Date().toISOString(), sourceDocumentVersion: this.input.source.version, completeness: this.completeness, configurationDigest: this.input.configuration.configurationDigest, rootFunctionIdentifier: rootFunction.id },
 			rootFunction, nodes: this.nodes, edges, diagnostics: this.diagnostics,
 			source: { uri: this.input.source.uri, languageId, documentVersion: this.input.source.version }, completeness: this.completeness,
 		};
@@ -274,6 +274,25 @@ class FlowBuilder {
 		const visit = async (node: ts.Node): Promise<void> => {
 			await this.cooperate();
 			if (isFunctionNode(node)) {return;}
+			if (ts.isConditionalExpression(node)) {
+				await visit(node.condition);
+				const whenTrueStart = this.nodes.length;
+				await visit(node.whenTrue);
+				const trueCalls = this.nodes.slice(whenTrueStart).filter(candidate => candidate.kind === 'call');
+				const whenFalseStart = this.nodes.length;
+				// The alternatives are mutually exclusive; do not imply a sequential
+				// edge from the last call in the true arm into the false arm.
+				this.skipNextEdge = true;
+				await visit(node.whenFalse);
+				const falseCalls = this.nodes.slice(whenFalseStart).filter(candidate => candidate.kind === 'call');
+				if (trueCalls.length > 0 && falseCalls.length > 0) {
+					const source = trueCalls[trueCalls.length - 1];
+					const target = falseCalls[0];
+					this.addEdge(source.id, target.id, 'uncertain', node);
+					this.addDiagnostic('order-uncertain', 'warning', 'Conditional expression alternatives have no statically determinable execution order.', node, source.id);
+				}
+				return;
+			}
 			if (ts.isAwaitExpression(node)) {
 				const awaitNode = this.addNode({ kind: 'await', expression: node.expression.getText(this.sourceFile), node });
 				await this.extractCalls(node.expression, awaitNode.id);
@@ -283,7 +302,7 @@ class FlowBuilder {
 				const callInfo = this.callInfo(node);
 				for (const child of childNodes(node)) {await visit(child);}
 				if (ownerId) {this.skipNextEdge = true;}
-				const call = this.addNode({ kind: 'call', calleeName: callInfo.calleeName, resolution: callInfo.resolution, label: callInfo.calleeName, node });
+				const call = this.addNode({ kind: 'call', calleeName: callInfo.calleeName, participant: callInfo.participant, resolution: callInfo.resolution, label: callInfo.calleeName, node });
 				if (callInfo.resolution !== 'resolved') {
 					this.addDiagnostic(callInfo.resolution === 'unknown' ? 'unknown-call' : 'unresolved-call', 'warning', callInfo.message, node, call.id);
 				}
@@ -295,12 +314,12 @@ class FlowBuilder {
 		await visit(root);
 	}
 
-	private addNode(data: { kind: FlowNode['kind']; node: ts.Node; condition?: string; expression?: string; catchBinding?: string; hasFinally?: boolean; calleeName?: string; resolution?: 'resolved' | 'unknown' | 'unresolved'; label?: string }): FlowNode {
+	private addNode(data: { kind: FlowNode['kind']; node: ts.Node; condition?: string; expression?: string; catchBinding?: string; hasFinally?: boolean; calleeName?: string; participant?: FlowParticipant; resolution?: 'resolved' | 'unknown' | 'unresolved'; label?: string }): FlowNode {
 		const id = `node:${this.nextNode++}`;
 		const base = { id, kind: data.kind, order: this.nodes.length, sourceLocation: this.location(data.node.getStart(this.sourceFile), data.node.end) } as const;
 		let node: FlowNode;
 		switch (data.kind) {
-			case 'call': node = { ...base, kind: 'call', calleeName: data.calleeName ?? '<call>', resolution: data.resolution ?? 'resolved', label: data.label }; break;
+			case 'call': node = { ...base, kind: 'call', calleeName: data.calleeName ?? '<call>', participant: data.participant, resolution: data.resolution ?? 'resolved', label: data.label }; break;
 			case 'branch': node = { ...base, kind: 'branch', condition: data.condition }; break;
 			case 'loop': node = { ...base, kind: 'loop', condition: data.condition }; break;
 			case 'await': node = { ...base, kind: 'await', expression: data.expression }; break;
@@ -401,23 +420,35 @@ class FlowBuilder {
 		const expression = node.expression;
 		if (isOptionalCall(node) || isOptionalAccess(expression)) {
 			if (ts.isPropertyAccessExpression(expression)) {
-				return { calleeName: expression.name.text, resolution: 'unresolved', message: `Optional member call "${expression.name.text}" could not be fully resolved statically.` };
+				return { calleeName: expression.name.text, participant: fallbackParticipant('unresolved'), resolution: 'unresolved', message: `Optional member call "${expression.name.text}" could not be fully resolved statically.` };
 			}
-			return { calleeName: '<unknown>', resolution: 'unknown', message: 'Optional call target could not be named statically.' };
+			return { calleeName: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Optional call target could not be named statically.' };
 		}
 		if (ts.isElementAccessExpression(expression)) {
-			return { calleeName: '<unknown>', resolution: 'unknown', message: 'Computed callable target could not be named statically.' };
+			return { calleeName: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Computed callable target could not be named statically.' };
 		}
 		if (ts.isPropertyAccessExpression(expression)) {
 			if (this.isDynamicReceiver(expression.expression) && !collectionMethodNames.has(expression.name.text)) {
-				return { calleeName: expression.name.text, resolution: 'unresolved', message: `Call "${expression.name.text}" has a dynamic receiver and was kept unresolved.` };
+				return { calleeName: expression.name.text, participant: fallbackParticipant('unresolved'), resolution: 'unresolved', message: `Call "${expression.name.text}" has a dynamic receiver and was kept unresolved.` };
 			}
-			return { calleeName: expression.name.text, resolution: 'resolved', message: '' };
+			return { calleeName: expression.name.text, participant: this.participantForReceiver(expression.expression), resolution: 'resolved', message: '' };
 		}
 		if (ts.isIdentifier(expression) || expression.kind === ts.SyntaxKind.SuperKeyword) {
-			return { calleeName: expression.getText(this.sourceFile), resolution: 'resolved', message: '' };
+			return { calleeName: expression.getText(this.sourceFile), participant: moduleParticipant(this.input.source.uri) ?? fallbackParticipant('unknown'), resolution: 'resolved', message: '' };
 		}
-		return { calleeName: '<unknown>', resolution: 'unknown', message: 'Call target could not be named statically.' };
+		return { calleeName: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Call target could not be named statically.' };
+	}
+
+	private participantForRoot(): FlowParticipant {
+		return moduleParticipant(this.input.source.uri) ?? fallbackParticipant('unknown');
+	}
+
+	private participantForReceiver(receiver: ts.Expression): FlowParticipant {
+		const name = receiver.getText(this.sourceFile);
+		if (ts.isIdentifier(receiver)) {
+			return namedParticipant(/^[A-Z]/.test(name) ? 'class' : 'instance', name);
+		}
+		return moduleParticipant(this.input.source.uri) ?? fallbackParticipant('unknown');
 	}
 
 	private isDynamicReceiver(expression: ts.Expression): boolean {
@@ -460,6 +491,7 @@ interface LoopContext {
 
 interface CallInfo {
 	readonly calleeName: string;
+	readonly participant: FlowParticipant;
 	readonly resolution: 'resolved' | 'unknown' | 'unresolved';
 	readonly message: string;
 }

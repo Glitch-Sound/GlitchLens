@@ -525,7 +525,7 @@
   - _Boundary: Common Flow Model_
   - _Requirements: 15.3, 15.4_
 
-- [ ] 20.2 TypeScript / JavaScript の評価順とループ制御を抽出する
+- [x] 20.2 TypeScript / JavaScript の評価順とループ制御を抽出する
   - 入れ子の呼び出しを inner から outer の実行順で抽出し、loop context から break と continue の制御移動を生成する。
   - break はループ後の最初の到達可能 node へ接続し、後続がない場合は `break-exit` edge を生成しない。continue は対応する loop node へ接続する。
   - 静的に順序を確定できない場合だけ不確実性の diagnostic を生成し、解析規則の変更時には analyzer version を更新する。

@@ -46,6 +46,39 @@ suite('TypeScriptAnalyzer static flow extraction', () => {
 		assert.deepStrictEqual(result.model.nodes.filter(node => node.kind === 'call').map(node => node.calleeName), ['inner', 'outer']);
 	});
 
+	test('connects break to the first reachable statement after nested loops and continue to its innermost loop', async () => {
+		const result = await analyze(`function target(items) { while (outer()) { for (const item of items) { continue; break; } afterInner(); break; } afterOuter(); }`, 'javascript', 20);
+		assert.strictEqual(result.status, 'success');
+		if (result.status !== 'success') {return;}
+		const loops = result.model.nodes.filter(node => node.kind === 'loop');
+		const continueNode = result.model.nodes.find(node => node.kind === 'continue');
+		const breaks = result.model.nodes.filter(node => node.kind === 'break');
+		const afterInner = result.model.nodes.find(node => node.kind === 'call' && node.calleeName === 'afterInner');
+		const afterOuter = result.model.nodes.find(node => node.kind === 'call' && node.calleeName === 'afterOuter');
+		assert.strictEqual(loops.length, 2);
+		assert.ok(continueNode && breaks.length === 2 && afterInner && afterOuter);
+		assert.ok(result.model.edges.some(edge => edge.sourceNodeId === continueNode?.id && edge.targetNodeId === loops[1]?.id && edge.kind === 'continue-loop'));
+		assert.ok(result.model.edges.some(edge => edge.sourceNodeId === breaks[0]?.id && edge.targetNodeId === afterInner?.id && edge.kind === 'break-exit'));
+		assert.ok(result.model.edges.some(edge => edge.sourceNodeId === breaks[1]?.id && edge.targetNodeId === afterOuter?.id && edge.kind === 'break-exit'));
+	});
+
+	test('does not create break-exit when a loop has no reachable successor', async () => {
+		const result = await analyze(`function target() { while (ready()) { break; } }`, 'typescript', 20);
+		assert.strictEqual(result.status, 'success');
+		if (result.status !== 'success') {return;}
+		const breakNode = result.model.nodes.find(node => node.kind === 'break');
+		assert.ok(breakNode);
+		assert.strictEqual(result.model.edges.some(edge => edge.sourceNodeId === breakNode?.id && edge.kind === 'break-exit'), false);
+	});
+
+	test('reports uncertain order only for conditional expression alternatives', async () => {
+		const result = await analyze(`function target(flag) { return flag ? first() : second(); }`, 'javascript', 20);
+		assert.ok(result.status === 'partial' || result.status === 'success');
+		if (result.status !== 'partial' && result.status !== 'success') {return;}
+		assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'order-uncertain'));
+		assert.ok(result.model.edges.some(edge => edge.kind === 'uncertain'));
+	});
+
 	test('does not connect mutually exclusive branches with a sequential edge', async () => {
 		const result = await analyze(`function target(flag) { if (flag) { yes(); } else { no(); } }`, 'javascript', 20);
 		assert.strictEqual(result.status, 'success');
