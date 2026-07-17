@@ -64,6 +64,19 @@ suite('MermaidRenderer', () => {
 		assert.strictEqual(edgeEntry.sourceLocation.uri, 'file:///workspace/source.ts');
 	});
 
+	test('renders the first call without an incoming edge from the untitled root', () => {
+		const model = createModel({
+			nodes: [call('node:first', 1, 'firstCall', 'resolved')],
+			edges: [],
+		});
+
+		const result = new MermaidRenderer().render(model);
+
+		assert.ok(result.mermaidText.includes('root->>firstCall: firstCall'));
+		assert.ok(result.sourceMap.some(entry => entry.nodeId === 'node:first' && entry.edgeId === undefined));
+		assert.deepStrictEqual(result.warnings, []);
+	});
+
 	test('marks uncertain ordering from edges and diagnostics in Mermaid output', () => {
 		const model = createModel({
 			nodes: [call('node:later', 1, 'later', 'resolved')],

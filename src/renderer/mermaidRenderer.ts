@@ -66,6 +66,7 @@ class RenderContext {
 		this.addParticipant('root', '');
 		this.prepareParticipants();
 		this.renderParticipants();
+		this.renderEntryCall();
 		this.renderEdges();
 		this.renderDiagnostics();
 		this.warnUnsupportedNodes();
@@ -116,6 +117,16 @@ class RenderContext {
 			}
 			this.renderPath(edge);
 		}
+	}
+
+	private renderEntryCall(): void {
+		const incomingTargets = new Set(this.model.edges.map(edge => edge.targetNodeId));
+		const entry = this.orderedNodes().find((node): node is Extract<FlowNode, { kind: 'call' }> => node.kind === 'call' && !incomingTargets.has(node.id));
+		if (!entry) {
+			return;
+		}
+		this.renderedNodeIds.add(entry.id);
+		this.renderCall(entry, undefined);
 	}
 
 	private renderTarget(target: FlowNode, edge: FlowEdge): void {
@@ -330,9 +341,9 @@ class RenderContext {
 		}
 	}
 
-	private renderCall(node: Extract<FlowNode, { kind: 'call' }>, edge: FlowEdge): void {
+	private renderCall(node: Extract<FlowNode, { kind: 'call' }>, edge?: FlowEdge): void {
 		const participantId = this.nodeParticipants.get(node.id) ?? this.participantForCall(node);
-		if (edge.kind === 'uncertain') {
+		if (edge?.kind === 'uncertain') {
 			const uncertainLine = this.addLine(`Note over root,${participantId}: order uncertain`);
 			this.addSourceMap(edge.sourceLocation ?? node.sourceLocation, node.id, edge.id, uncertainLine);
 		}
@@ -340,15 +351,15 @@ class RenderContext {
 			kind: 'call',
 			calleeName: node.calleeName,
 			resolution: node.resolution,
-			awaited: this.isAwaitedCall(edge),
+			awaited: edge ? this.isAwaitedCall(edge) : false,
 		});
 		const line = this.addLine(`root->>${participantId}: ${escapeText(message)}`);
-		this.addSourceMap(node.sourceLocation, node.id, edge.id, line);
+		this.addSourceMap(node.sourceLocation, node.id, edge?.id, line);
 
 		if (node.resolution === 'unknown' || node.resolution === 'unresolved') {
 			const note = node.resolution === 'unknown' ? 'unknown call' : 'unresolved call';
 			const noteLine = this.addLine(`Note over root,${participantId}: ${note}`);
-			this.addSourceMap(node.sourceLocation, node.id, edge.id, noteLine);
+			this.addSourceMap(node.sourceLocation, node.id, edge?.id, noteLine);
 		}
 	}
 

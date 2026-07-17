@@ -574,11 +574,36 @@
   - _Boundary: VisualizationView, ClipboardAdapter, Integration validation_
   - _Requirements: 14.4, 16.6_
 
-- [ ] 22. 実行順とライフライン表示の最終統合検証を行う
-- [ ] 22.1 全品質ゲートと回帰検証を実施する
-  - 実行順、Break / Continue、RendererWarning、ライフライン、コピー、cache miss を横断 fixture で検証する。
+- [ ] 22. 関数先頭の要求メッセージを省略せずに描画する
+- [x] 22.1 Mermaid Renderer の entry-call 描画を実装する
+  - 先行する FlowEdge を持たない Call のうち最初のものを、無題 root からの要求メッセージとして一度だけ出力する。
+  - 表示専用の entry として扱い、Analyzer、Common Flow Model、diagnostic、キャッシュへ人工的な node、edge、warning を追加しない。
+  - entry-call の SourceMap に nodeId と source location を保持し、実在しない edgeId を生成しない。
+  - Observable completion: Call だけを含む Flow Model でも、無題 root から participant への操作メッセージが Mermaid text に含まれる。
+  - _Boundary: MermaidRenderer_
+  - _Requirements: 16.7_
+
+- [ ] 22.2 entry-call の Mermaid と SourceMap の回帰テストを追加する
+  - edge を持たない先頭 Call、先頭 Call に続く Call、Unknown、Unresolved の fixture で、メッセージ、順序、participant、重複排除を検証する。
+  - entry-call が一度だけ描画され、SourceMap が nodeId と source location を保持し、架空の edgeId や RendererWarning を生成しないことを検証する。
+  - Observable completion: 先頭 Call を含む Renderer fixture が Mermaid text、SourceMap、warning の期待値とともに成功する。
+  - _Depends: 22.1_
+  - _Boundary: MermaidRenderer tests_
+  - _Requirements: 16.7_
+
+- [ ] 22.3 先頭 Call の VS Code 表示・コピー統合を検証する
+  - cursor 実行、CodeLens 実行、Copy Mermaid の各経路で、関数先頭の Call が表示中とコピー対象の Mermaid text に含まれることを検証する。
+  - 既存の partial result、SourceMap、コードジャンプ、Unknown / Unresolved、無題 root の表示契約に回帰がないことを確認する。
+  - Observable completion: `fetchUser`、`firstCall`、`makeDiagram` を含む VS Code integration fixture が期待する Mermaid text とコピー内容を返す。
+  - _Depends: 22.1_
+  - _Boundary: VS Code Integration validation_
+  - _Requirements: 16.6, 16.7_
+
+- [ ] 23. 実行順とライフライン表示の最終統合検証を行う
+- [ ] 23.1 全品質ゲートと回帰検証を実施する
+  - 実行順、Break / Continue、RendererWarning、ライフライン、entry-call、コピー、cache miss を横断 fixture で検証する。
   - `check-types`、`lint`、`compile`、unit test、integration test を実行する。
   - Observable completion: Requirement 15 と 16 の全受け入れ条件、およびコレクション判定・既存可視化契約が品質ゲート成功で確認できる。
-  - _Depends: 20.3, 21.4_
-  - _Boundary: Integration validation_
-  - _Requirements: 14.5, 15.1, 15.2, 15.3, 15.4, 15.5, 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
+  - _Depends: 20.3, 21.4, 22.2, 22.3_
+  - _Boundary: Final integration validation_
+  - _Requirements: 14.5, 15.1, 15.2, 15.3, 15.4, 15.5, 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 16.7_
