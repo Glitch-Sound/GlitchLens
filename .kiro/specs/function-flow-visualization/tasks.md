@@ -516,3 +516,69 @@
   - _Depends: 19.2_
   - _Boundary: VisualizationView / CommandController / Integration validation_
   - _Requirements: 14.2, 14.3, 14.4, 14.5_
+
+- [ ] 20. 言語横断の実行順とループ制御を実装する
+- [x] 20.1 Break / Continue の共通制御フロー契約を実装する
+  - Break と Continue を、source location と静的な実行順を持つ独立した処理要素として表現する。
+  - `break-exit` と `continue-loop` を制御移動 edge の種類として表現できる共通契約を追加する。具体的な到達可能先と後続のない break の扱いは Analyzer task 20.2 で実装する。
+  - Observable completion: Flow Model contract fixture で Break / Continue の kind、順序、source location、label、`break-exit`、`continue-loop` の edge shape を確認できる。
+  - _Boundary: Common Flow Model_
+  - _Requirements: 15.3, 15.4_
+
+- [ ] 20.2 TypeScript / JavaScript の評価順とループ制御を抽出する
+  - 入れ子の呼び出しを inner から outer の実行順で抽出し、loop context から break と continue の制御移動を生成する。
+  - break はループ後の最初の到達可能 node へ接続し、後続がない場合は `break-exit` edge を生成しない。continue は対応する loop node へ接続する。
+  - 静的に順序を確定できない場合だけ不確実性の diagnostic を生成し、解析規則の変更時には analyzer version を更新する。
+  - Observable completion: `outer(inner())`、break、continue、後続のない break、不確実な順序を含む fixture で、node / edge 順序、terminal edge 不在、diagnostic、analyzer version の差分による cache miss を確認できる。
+  - _Depends: 20.1_
+  - _Boundary: TypeScriptAnalyzer_
+  - _Requirements: 14.5, 15.1, 15.2, 15.3, 15.4, 15.5_
+
+- [ ] 20.3 制御フローの描画警告と表示通知を統合する
+  - Mermaid で完全に表現できない node / edge 組合せを RendererWarning として返し、Application が表示通知へ変換する。
+  - Analyzer が返す順序不確実性 diagnostic と RendererWarning を別経路で扱い、Break / Continue の処理 Note、SourceMap、部分結果表示を維持する。
+  - Observable completion: 表現不能な制御フローと順序不確実性を含む図で、両方の notice が区別して表示され、静的に推定できる処理順は Mermaid 図に残る。
+  - _Depends: 20.1, 20.2_
+  - _Boundary: MermaidRenderer, Application, VisualizationView_
+  - _Requirements: 3.4, 6.2, 8.5, 15.5_
+
+- [ ] 21. 指定関数を起点とするライフラインとメッセージを実装する
+- [ ] 21.1 Call 専用のライフライン主体契約を追加する
+  - Call がクラス、インスタンス、Unknown、Unresolved の主体情報を持てるようにし、Unknown と Unresolved は別々の固定 key へ集約する。
+  - 指定関数の root は主体情報に含めず、Renderer が無題の固定ライフラインとして扱える状態にする。
+  - Observable completion: Flow Model contract test で、Call の主体 kind、key、label、操作名と、root が主体として解決されないことを確認できる。
+  - _Boundary: Common Flow Model_
+  - _Requirements: 16.2, 16.4, 16.5_
+
+- [ ] 21.2 TypeScript / JavaScript のクラス・インスタンス主体を抽出する
+  - 識別可能な receiver をクラスまたはインスタンスとして扱い、標準コレクション操作は `Array` への要求として扱う。
+  - 直接呼び出し、chain call、computed call、optional call は主体名を推測せず、解決状態に対応する Unknown / Unresolved を維持する。
+  - Observable completion: クラス、インスタンス、標準コレクション、各種未解決呼び出しの fixture が、要件どおりの主体と解決状態を返す。
+  - _Depends: 21.1_
+  - _Boundary: TypeScriptAnalyzer_
+  - _Requirements: 14.1, 14.2, 14.3, 16.2, 16.5_
+
+- [ ] 21.3 無題 root、主体ライフライン、要求メッセージを Mermaid に出力する
+  - 指定関数を最左・空タイトルの固定 root として出力し、同じ主体だけを同じライフラインへ統合する。
+  - 操作名を要求メッセージとして出力し、Unknown と Unresolved は別々に一つずつ表示する。主体情報がない Call は関数名、モジュール名、ファイル名を代替タイトルにしない。
+  - Observable completion: Mermaid fixture で無題 root、クラス／インスタンス名、同一主体の統合、異なる主体の分離、各一つの Unknown / Unresolved、引数なしの操作メッセージを確認できる。
+  - _Depends: 21.1_
+  - _Boundary: MermaidRenderer_
+  - _Requirements: 14.2, 16.1, 16.3, 16.4, 16.5, 16.6_
+
+- [ ] 21.4 ライフラインの表示・コピー統合を回帰検証する
+  - 表示中とコピーされた Mermaid text が一致し、SourceMap、コードジャンプ、部分解析、処理順、未解決通知を維持する。
+  - 既存の await、return、diagnostic、UI 操作へ回帰がないことを確認する。
+  - Observable completion: VisualizationView と ClipboardAdapter の統合テストで、ライフライン表示とコピーの一致、および既存の追跡・部分結果契約を確認できる。
+  - _Depends: 21.2, 21.3_
+  - _Boundary: VisualizationView, ClipboardAdapter, Integration validation_
+  - _Requirements: 14.4, 16.6_
+
+- [ ] 22. 実行順とライフライン表示の最終統合検証を行う
+- [ ] 22.1 全品質ゲートと回帰検証を実施する
+  - 実行順、Break / Continue、RendererWarning、ライフライン、コピー、cache miss を横断 fixture で検証する。
+  - `check-types`、`lint`、`compile`、unit test、integration test を実行する。
+  - Observable completion: Requirement 15 と 16 の全受け入れ条件、およびコレクション判定・既存可視化契約が品質ゲート成功で確認できる。
+  - _Depends: 20.3, 21.4_
+  - _Boundary: Integration validation_
+  - _Requirements: 14.5, 15.1, 15.2, 15.3, 15.4, 15.5, 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_

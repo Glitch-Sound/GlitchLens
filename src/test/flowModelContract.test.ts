@@ -199,6 +199,70 @@ suite('Common Flow Model contract', () => {
 
 		assert.deepStrictEqual(offenders, []);
 	});
+
+	test('models break and continue as independent control nodes and edges', () => {
+		const breakNode: FlowModel['nodes'][number] = {
+			id: 'node:break',
+			kind: 'break',
+			order: 2,
+			sourceLocation: sourceLocation(2, 2, 2, 8),
+			label: 'outer',
+		};
+		const continueNode: FlowModel['nodes'][number] = {
+			id: 'node:continue',
+			kind: 'continue',
+			order: 3,
+			sourceLocation: sourceLocation(3, 2, 3, 11),
+		};
+		const edges: FlowModel['edges'] = [
+			{
+				id: 'edge:break-exit',
+				sourceNodeId: breakNode.id,
+				targetNodeId: 'node:after-loop',
+				kind: 'break-exit',
+				executionOrder: 2,
+			},
+			{
+				id: 'edge:continue-loop',
+				sourceNodeId: continueNode.id,
+				targetNodeId: 'node:loop',
+				kind: 'continue-loop',
+				executionOrder: 3,
+			},
+		];
+
+		assert.strictEqual(breakNode.id, 'node:break');
+		assert.strictEqual(breakNode.kind, 'break');
+		assert.strictEqual(breakNode.order, 2);
+		assert.deepStrictEqual(breakNode.sourceLocation.range, {
+			start: { line: 2, character: 2 },
+			end: { line: 2, character: 8 },
+		});
+		assert.strictEqual(breakNode.label, 'outer');
+		assert.strictEqual(continueNode.id, 'node:continue');
+		assert.strictEqual(continueNode.kind, 'continue');
+		assert.strictEqual(continueNode.order, 3);
+		assert.deepStrictEqual(continueNode.sourceLocation.range, {
+			start: { line: 3, character: 2 },
+			end: { line: 3, character: 11 },
+		});
+		assert.strictEqual(continueNode.label, undefined);
+		assert.deepStrictEqual(edges.map(edge => edge.kind), ['break-exit', 'continue-loop']);
+		assert.deepStrictEqual(edges[0], {
+			id: 'edge:break-exit',
+			sourceNodeId: 'node:break',
+			targetNodeId: 'node:after-loop',
+			kind: 'break-exit',
+			executionOrder: 2,
+		});
+		assert.deepStrictEqual(edges[1], {
+			id: 'edge:continue-loop',
+			sourceNodeId: 'node:continue',
+			targetNodeId: 'node:loop',
+			kind: 'continue-loop',
+			executionOrder: 3,
+		});
+	});
 });
 
 function sourceLocation(
