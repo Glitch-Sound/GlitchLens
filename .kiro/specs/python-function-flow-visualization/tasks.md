@@ -119,21 +119,30 @@
   - _Requirements: Python 1.1-5.6、共通 15.1-15.5_
   - _Design: Python「Test Strategy」「Revalidation Triggers」、共通「Cross-language Execution Order and Loop Control」_
 
-- [ ] 10. Python のライフライン主体候補を共通契約へ供給する
-  - Name、MemberExpression、enclosing class、source URI から、instance / class / module の優先順位で participant candidate を抽出する。
-  - `foo()` と `factory().run()` の操作名を保持し、候補がない場合は共通 Unknown / Unresolved participant を使用する。
-  - Observable completion: Python Flow Model fixture で participant label / key と operation name が確認でき、Python 固有の Renderer / WebView 分岐を追加しない。
-  - _Depends: function-flow-visualization 20.1_
-  - _Boundary: PythonAnalyzer_
-  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
+- [ ] 10. Python の共通描画契約を実装する
 
-- [ ] 11. Python 主体名表示の共通 Renderer 回帰を検証する
-  - instance、class、module、Unknown、Unresolved の各ケースを共通 MermaidRenderer へ渡し、同一主体の集約と異なる主体の分離を検証する。
-  - `process_orders` と、共通 Task 20.4 で確認済みの TypeScript / JavaScript 回帰結果を突き合わせ、Mermaid copy、SourceMap、diagnostic、処理順、Workspace Trust、ローカル静的解析境界の言語横断契約を再確認する。
-  - Observable completion: Python と既存言語の participant contract 回帰、unit / integration quality gate が成功する。
-  - _Depends: 10, function-flow-visualization 20.1, function-flow-visualization 20.2, function-flow-visualization 20.3, function-flow-visualization 20.4_
+- [x] 10.1 Python Call の主体と操作名を共通契約へ変換する
+  - 単一識別子 receiver を TypeScript と同じ class / instance participant とし、操作名を主体名と分離する。
+  - direct、chain、computed、dynamic call はモジュール名等で補完せず、Unknown / Unresolved と対応する diagnostic を生成する。direct call は操作名を保持しつつ Unknown participant とする。
+  - **完了条件**: `results.append()` と `logger.error()` が別ライフラインになり、`foo()` は操作名 `foo` の Unknown、動的呼び出しは対応 diagnostic 付きで Python Flow Model と Mermaid に確認できる。
+  - _Boundary: PythonAnalyzer_
+  - _Requirements: 2.2, 3.1, 3.2, 3.3, 4.1, 4.2, 6.1, 6.2, 6.3, 6.4, 6.6_
+
+- [ ] 10.2 Python の Await と終端表示を共通 edge 意味論へ合わせる
+  - Await node から Call へ進む実行順と、Return / Throw node がキーワードを除く式を保持する規則を実装する。
+  - Await → Call と式中 Call → Return / Throw の順序を Flow Model と Mermaid fixture の両方で検証する。
+  - **完了条件**: `await service.save()` が `await save` と表示され、`return build()` と `raise create_error()` がキーワード重複なしで描画され、各 Call が終端メッセージに先行する。
+  - _Boundary: PythonAnalyzer_
+  - _Depends: 10.1_
+  - _Requirements: 2.3, 2.8, 3.1, 3.3, 5.5_
+
+- [ ] 11. Python と既存言語の描画契約を回帰検証する
+  - participant 集約、Unknown / Unresolved、Await、Return / Throw、Mermaid text、Clipboard、SourceMap、Analyzer version による cache miss を Python と既存言語で検証する。
+  - CodeLens、Workspace Trust、部分結果、ローカル静的解析境界を含む既存の統合経路が Python の変換変更後も維持されることを確認する。
+  - **完了条件**: Python と TypeScript / JavaScript の unit・integration 品質ゲートが成功し、Python 専用 Renderer / WebView 分岐を追加せずに図とコピー結果が一致する。
   - _Boundary: PythonAnalyzer tests, MermaidRenderer tests, Integration validation_
-  - _Requirements: 5.5, 6.1, 6.2, 6.3, 6.4, 6.5_
+  - _Depends: 10.1, 10.2_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 2.11, 2.12, 3.1, 3.2, 3.3, 3.4, 3.5, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
 ## Review Gates
 
@@ -141,6 +150,7 @@
 - Task 3 完了後: locator registry が TypeScript 系の CodeLens 契約を維持することを確認する。
 - Task 6 完了後: Python の構文変換が Renderer に Python 固有分岐を要求していないことを確認する。
 - Task 9 完了後: package、統合 test、ローカル静的解析境界の結果を確認して実装完了を判定する。
-- Task 10 完了後: Python の participant candidate が共通 Flow Model contract だけを利用し、Python 固有の Renderer / WebView 分岐を要求しないことを確認する。
-- Task 11 完了後: 共通 Task 20 の participant contract と Python の回帰結果を照合し、Mermaid text、コピー、SourceMap の言語横断契約を確認する。
+- Task 10.1 完了後: participant と operation name が分離され、識別不能な主体をモジュール名等で補完していないことを確認する。
+- Task 10.2 完了後: Await → Call と Call → Return / Throw の edge が既存 Renderer の表示契約に一致することを確認する。
+- Task 11 完了後: Mermaid text、コピー、SourceMap、CodeLens、Workspace Trust、cache を含む言語横断契約を確認する。
 - 共通 design の「Cross-language Execution Order and Loop Control」に残る、TypeScript / JavaScript の入れ子 call が将来追従するという記述は、Task 2 が実装済みであることを前提に、共通仕様レビューで実装済み状態へ更新する。この注記自体は共通 requirements.md / design.md を変更しない。

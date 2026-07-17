@@ -43,6 +43,31 @@ suite('Python function flow', () => {
 		assert.strictEqual(result.diagnostics.some(diagnostic => diagnostic.kind === 'unsupported-syntax'), false);
 	});
 
+	test('separates Python receiver participants from operation names', async () => {
+		const text = [
+			'def target(results, logger):',
+			'    results.append(1)',
+			'    logger.error("bad")',
+			'    Service.save()',
+			'    foo()',
+			'    obj.child.run()',
+			'    values[index]()',
+		].join('\n');
+		const result = await new PythonAnalyzer().analyze(input(text, text.indexOf('target')));
+		assert.ok(result.status === 'success' || result.status === 'partial');
+		if (result.status !== 'success' && result.status !== 'partial') { return; }
+		const calls = result.model.nodes.filter(node => node.kind === 'call');
+		assert.deepStrictEqual(calls.map(node => node.calleeName), ['append', 'error', 'save', 'foo', 'run', '<unknown>']);
+		const participant = (name: string) => calls.find(node => node.calleeName === name)?.participant;
+		assert.deepStrictEqual(participant('append'), { key: 'instance:results', label: 'results', kind: 'instance' });
+		assert.deepStrictEqual(participant('error'), { key: 'instance:logger', label: 'logger', kind: 'instance' });
+		assert.deepStrictEqual(participant('save'), { key: 'class:Service', label: 'Service', kind: 'class' });
+		assert.deepStrictEqual(participant('foo'), { key: 'unknown', label: 'Unknown', kind: 'unknown' });
+		assert.deepStrictEqual(participant('run'), { key: 'unresolved', label: 'Unresolved', kind: 'unresolved' });
+		assert.deepStrictEqual(participant('<unknown>'), { key: 'unknown', label: 'Unknown', kind: 'unknown' });
+		assert.ok(result.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call' || diagnostic.kind === 'unknown-call'));
+	});
+
 	test('handles assignments, except bindings, loop exits, and concise control labels', async () => {
 		const text = [
 			'async def hoge(orders: list[Order]) -> list[str]:',
