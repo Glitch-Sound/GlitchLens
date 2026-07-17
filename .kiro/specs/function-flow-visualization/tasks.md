@@ -558,7 +558,7 @@
   - _Boundary: TypeScriptAnalyzer_
   - _Requirements: 14.1, 14.2, 14.3, 16.2, 16.5_
 
-- [ ] 21.3 無題 root、主体ライフライン、要求メッセージを Mermaid に出力する
+- [x] 21.3 無題 root、主体ライフライン、要求メッセージを Mermaid に出力する
   - 指定関数を最左・空タイトルの固定 root として出力し、同じ主体だけを同じライフラインへ統合する。
   - 操作名を要求メッセージとして出力し、Unknown と Unresolved は別々に一つずつ表示する。主体情報がない Call は関数名、モジュール名、ファイル名を代替タイトルにしない。
   - Observable completion: Mermaid fixture で無題 root、クラス／インスタンス名、同一主体の統合、異なる主体の分離、各一つの Unknown / Unresolved、引数なしの操作メッセージを確認できる。

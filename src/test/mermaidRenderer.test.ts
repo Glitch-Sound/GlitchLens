@@ -521,6 +521,23 @@ suite('MermaidRenderer', () => {
 		assert.strictEqual(countOccurrences(result.mermaidText, 'root->>load: load'), 2);
 	});
 
+	test('keeps the root lifeline untitled and separates fallback participants by fixed key', () => {
+		const model = createModel({
+			nodes: [
+				{ ...call('node:unknown', 1, 'lookup', 'unknown'), participant: { key: 'unknown', label: 'Unknown', kind: 'unknown' as const } },
+				{ ...call('node:unresolved', 2, 'lookup', 'unresolved'), participant: { key: 'unresolved', label: 'Unresolved', kind: 'unresolved' as const } },
+			],
+			edges: [edge('edge:unknown', 'node:unknown', 1), edge('edge:unresolved', 'node:unresolved', 2)],
+		});
+		const result = new MermaidRenderer().render(model);
+
+		assert.ok(result.mermaidText.includes('participant root as '));
+		assert.strictEqual(countOccurrences(result.mermaidText, 'participant Unknown as Unknown'), 1);
+		assert.strictEqual(countOccurrences(result.mermaidText, 'participant Unresolved as Unresolved'), 1);
+		assert.ok(result.mermaidText.includes('root->>Unknown: unknown call'));
+		assert.ok(result.mermaidText.includes('root->>Unresolved:'));
+	});
+
 	test('renders loop edges with loop block and preserves nested call order', () => {
 		const model = createModel({
 			nodes: [
