@@ -77,6 +77,31 @@ suite('MermaidRenderer', () => {
 		assert.deepStrictEqual(result.warnings, []);
 	});
 
+	test('keeps entry-call order and fallback participants when the first call has a successor', () => {
+		const model = createModel({
+			nodes: [
+				call('node:first', 1, 'firstCall', 'unknown'),
+				{
+					...call('node:second', 2, 'secondCall', 'unresolved'),
+					participant: { key: 'unresolved', label: 'Unresolved', kind: 'unresolved' as const },
+				},
+			],
+			edges: [edge('edge:second', 'node:second', 2, 'next', 'node:first')],
+			completeness: 'partial',
+		});
+
+		const result = new MermaidRenderer().render(model);
+		const firstMessage = 'root->>Unknown: unknown call';
+		const secondMessage = 'root->>Unresolved: secondCall (unresolved)';
+
+		assert.strictEqual(countOccurrences(result.mermaidText, firstMessage), 1, result.mermaidText);
+		assert.strictEqual(countOccurrences(result.mermaidText, secondMessage), 1, result.mermaidText);
+		assert.ok(result.mermaidText.indexOf(firstMessage) < result.mermaidText.indexOf(secondMessage));
+		assert.strictEqual(countOccurrences(result.mermaidText, 'participant Unknown as Unknown'), 1);
+		assert.strictEqual(countOccurrences(result.mermaidText, 'participant Unresolved as Unresolved'), 1);
+		assert.deepStrictEqual(result.warnings, []);
+	});
+
 	test('marks uncertain ordering from edges and diagnostics in Mermaid output', () => {
 		const model = createModel({
 			nodes: [call('node:later', 1, 'later', 'resolved')],

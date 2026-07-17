@@ -583,7 +583,7 @@
   - _Boundary: MermaidRenderer_
   - _Requirements: 16.7_
 
-- [ ] 22.2 entry-call の Mermaid と SourceMap の回帰テストを追加する
+- [x] 22.2 entry-call の Mermaid と SourceMap の回帰テストを追加する
   - edge を持たない先頭 Call、先頭 Call に続く Call、Unknown、Unresolved の fixture で、メッセージ、順序、participant、重複排除を検証する。
   - entry-call が一度だけ描画され、SourceMap が nodeId と source location を保持し、架空の edgeId や RendererWarning を生成しないことを検証する。
   - Observable completion: 先頭 Call を含む Renderer fixture が Mermaid text、SourceMap、warning の期待値とともに成功する。
