@@ -36,6 +36,20 @@ suite('VisualizationView', () => {
 		assertNoForbiddenModelObjects(success);
 	});
 
+	test('preserves diagnostic and renderer warning source identifiers in the view model', () => {
+		const model = createVisualizationViewModel(successResult('partial', {
+			notices: [
+				noticeWithLocation('order-uncertain', 'warning', 'Execution order is uncertain.', 'node:branch', 'edge:uncertain'),
+				noticeWithLocation('renderer-warning', 'warning', 'Edge could not be rendered.', undefined, 'edge:unsupported'),
+			],
+		}));
+
+		assert.deepStrictEqual(model.notices.map(item => ({ kind: item.kind, nodeId: item.nodeId, edgeId: item.edgeId })), [
+			{ kind: 'order-uncertain', nodeId: 'node:branch', edgeId: 'edge:uncertain' },
+			{ kind: 'renderer-warning', nodeId: undefined, edgeId: 'edge:unsupported' },
+		]);
+	});
+
 	test('uses fallback mode when Mermaid text is absent or render fallback is requested', () => {
 		const failedMermaid = createVisualizationViewModel(successResult('success'), { forceFallback: true });
 		const failure = createVisualizationViewModel(failureResult('failed'));
@@ -958,6 +972,16 @@ function notice(kind: VisualizationResult['notices'][number]['kind'], severity: 
 			range: { start: { line: 1, character: 2 }, end: { line: 1, character: 8 } },
 		},
 	};
+}
+
+function noticeWithLocation(
+	kind: VisualizationResult['notices'][number]['kind'],
+	severity: VisualizationResult['notices'][number]['severity'],
+	message: string,
+	nodeId?: string,
+	edgeId?: string,
+): VisualizationResult['notices'][number] {
+	return { ...notice(kind, severity, message), nodeId, edgeId };
 }
 
 function assertNoForbiddenModelObjects(value: VisualizationViewModel): void {

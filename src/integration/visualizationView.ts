@@ -26,6 +26,8 @@ export interface VisualizationViewNotice {
 	readonly kind: VisualizationNotice['kind'];
 	readonly severity: VisualizationNotice['severity'];
 	readonly message: string;
+	readonly nodeId?: string;
+	readonly edgeId?: string;
 	readonly sourceLocation?: VisualizationSourceLocation;
 }
 
@@ -256,6 +258,8 @@ function toViewNotice(notice: VisualizationNotice): VisualizationViewNotice {
 		kind: notice.kind,
 		severity: notice.severity,
 		message: notice.message,
+		nodeId: notice.nodeId,
+		edgeId: notice.edgeId,
 		sourceLocation: notice.sourceLocation,
 	};
 }

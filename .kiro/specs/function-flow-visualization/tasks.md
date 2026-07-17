@@ -534,7 +534,7 @@
   - _Boundary: TypeScriptAnalyzer_
   - _Requirements: 14.5, 15.1, 15.2, 15.3, 15.4, 15.5_
 
-- [ ] 20.3 制御フローの描画警告と表示通知を統合する
+- [x] 20.3 制御フローの描画警告と表示通知を統合する
   - Mermaid で完全に表現できない node / edge 組合せを RendererWarning として返し、Application が表示通知へ変換する。
   - Analyzer が返す順序不確実性 diagnostic と RendererWarning を別経路で扱い、Break / Continue の処理 Note、SourceMap、部分結果表示を維持する。
   - Observable completion: 表現不能な制御フローと順序不確実性を含む図で、両方の notice が区別して表示され、静的に推定できる処理順は Mermaid 図に残る。
