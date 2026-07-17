@@ -9,6 +9,7 @@ export const flowEdgeKinds = [
 	'false',
 	'loop-body',
 	'loop-exit',
+	// Control-transfer edges originate at FlowBreakNode / FlowContinueNode.
 	'break-exit',
 	'continue-loop',
 	'try',

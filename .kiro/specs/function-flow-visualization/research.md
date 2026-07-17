@@ -106,6 +106,18 @@
 
 ## Design Decisions
 
+### Decision: 入辺のない先頭 Call を Renderer の entry として描画する
+- **Context**: Requirement 16.7 は、関数先頭の Call が先行する処理を持たない場合でも図とコピーから省略されないことを求める。現行 Renderer は FlowEdge を起点に traversal するため、入辺がない最初の Call を描画できない。
+- **Sources Consulted**: `src/analyzers/typescript/typescriptAnalyzer.ts`, `src/renderer/mermaidRenderer.ts`, `src/test/extension.test.ts`, `src/test/mermaidRenderer.test.ts`。
+- **Alternatives Considered**:
+  1. Analyzer が人工的な root edge を Common Flow Model に追加する。
+  2. Common Flow Model に renderer 専用 root node を追加する。
+  3. Renderer が入辺のない先頭 Call を entry として選択する。
+- **Selected Approach**: Renderer が全 FlowEdge の target にならない Call のうち最小 order を entry-call として root から描画する。モデルを変更せず、通常の edge traversal と同じ描画済み node の重複排除を利用する。
+- **Rationale**: root は表示専用の概念であり、Analyzer の静的解析結果へ人工的な制御移動を混在させない。既存の Common Flow Model を言語非依存かつ表示方式非依存に保てる。
+- **Trade-offs**: entry-call の SourceMap には対応する実在 edge がないため edgeId を付与しない。entry-call 選択規則の変更時は Renderer と統合テストを再検証する。
+- **Follow-up**: edge を持たない最初の Call、後続 Call、Unknown / Unresolved、cursor、CodeLens、Clipboard の回帰テストを追加する。
+
 ### Decision: Common Flow Model を Stable Contract にする
 - **Context**: Requirements はユーザー可視の振る舞いを要求し、steering は Common Flow Model を唯一の中間表現と定義している。
 - **Alternatives Considered**:
@@ -218,6 +230,56 @@
 
 ---
 
+## Requirement 16: 指定関数を起点とするライフラインとメッセージの設計調査
+
+### Summary
+
+- 現在の Renderer は root function 名を左端 participant の label に用いるため、指定関数を無題にするには root の表示規則を分離する必要がある。
+- TypeScript Analyzer は receiver を取得できるため、クラス名またはインスタンス名だけを plain-data `FlowParticipant` として Flow Model に渡せる。
+- module URI、ファイル名、役割名を代替タイトルにすると今回の要件を逸脱するため、識別できない場合は `Unknown`／`Unresolved` の固定 participant へ集約する必要がある。
+
+### Research Log
+
+#### Existing model and renderer boundary
+
+- **Sources Consulted**: `src/flow-model/flowModel.ts`、`src/flow-model/flowNode.ts`、`src/analyzers/typescript/typescriptAnalyzer.ts`、`src/analyzers/python/pythonAnalyzer.ts`、`src/renderer/mermaidRenderer.ts`、関連 unit tests
+- **Findings**:
+  - root は `FlowFunction.name` を participant label として使用しており、固定の無題 root 表示へ変更する必要がある。
+  - PropertyAccessExpression の receiver は analyzer に存在するため、Identifier receiver をクラスまたはインスタンスとして Flow Model へ渡せる。
+  - existing participant key を利用すれば、`Unknown` と `Unresolved` を各一つへ集約できる。
+- **Implications**:
+  - Call participant の key と label を model contract に追加し、renderer は key で重複排除する。
+  - root は model 名や source URI を title に使用せず、Renderer 固定 ID と空 label で最初に出力する。
+  - `calleeName` は引数を含まない要求 message として残す。
+
+### Design Decisions
+
+#### Decision: 無題 root とクラス／インスタンス限定の FlowParticipant を導入する
+
+- **Alternatives Considered**:
+  1. Renderer が `calleeName`、source URI、または関数名からライフライン名を推測する。
+  2. TypeScript TypeChecker と言語別の型解析を導入し、実体を完全解決する。
+  3. Renderer が無題 root を固定出力し、Analyzer が構文から確定できるクラス／インスタンスだけを Call participant として渡す。
+- **Selected Approach**: 3 を採用する。
+- **Rationale**: 静的解析のみ・Language Analyzer boundary・Common Flow Model first を守り、ユーザーが指定したタイトルの範囲を超えない。
+- **Trade-offs**: 型を完全解決しないため、候補がない呼び出しは module fallback ではなく Unknown / Unresolved になる。
+- **Follow-up**: Analyzer version を更新し、participant contract 追加前の cache result を再利用しないことを検証する。
+
+#### Design Synthesis
+
+- **Generalization**: 言語固有の receiver 抽出を、クラス／インスタンス・unknown・unresolved だけを持つ共通 `FlowParticipant` へ一般化する。root は participant resolution の対象外とする。
+- **Build vs. Adopt**: Mermaid の標準 participant syntax と既存 Renderer を利用する。TypeChecker、外部パッケージ解決、追加ライブラリは導入しない。
+- **Simplification**: participant resolver を公開サービスにせず、各 Analyzer 内部の小さな変換と共通 Flow Model value object に限定する。モジュール・ファイル名の正規化は不要にする。
+
+### Risks & Mitigations
+
+- 同じ label を異なる主体が共有するリスク — `FlowParticipant.key` を participant の同一性に使い、label では集約しない。
+- `Unknown` が多数表示されるリスク — kind ごとの固定 key を使用して一つに集約する。
+- 無題 root が Mermaid 構文または表示テーマで意図せず可視化されるリスク — 実 Mermaid 描画を含む renderer fixture で空タイトルと最左位置を検証する。
+- collection method の receiver が実体不明なリスク — Requirement 14 の対象だけを `Array` クラスとして表し、その他は推測せず fallback する。
+
+---
+
 ## Requirement 13: メッセージラベル簡潔化の設計調査
 
 ### Summary
@@ -309,3 +371,52 @@
 - カスタムオブジェクトの `map` を誤って resolved にするリスク — collection method 集合を限定し、動的 `run` や計算プロパティの unresolved / unknown 回帰を維持する。
 - 判定変更後に旧キャッシュが残るリスク — Analyzer version を更新し、既存 CacheKey の version 差分による cache miss を利用する。
 - resolved と完全な型解決を混同するリスク — 設計と診断文言で、resolved は表示上の操作識別を意味し receiver の実行時型保証ではないことを明記する。
+
+---
+
+## Requirement 15: 実行順と Break / Continue 契約の設計調査
+
+### Summary
+
+- Common Flow Model の設計は `break-exit` と `continue-loop` を定義していた一方、FlowNode union に対応する node を含めておらず、設計内で矛盾していた。
+- 実装と contract test には既に `FlowBreakNode`、`FlowContinueNode`、対応 edge kind が存在するため、既存 node への曖昧な埋め込みではなく、明示的な node として設計へ採用する。
+- 静的解析の不確実性と Mermaid の表現不能は異なる責務であり、前者は FlowDiagnostic、後者は RendererWarning として Application で別々の notice に変換する。
+
+### Research Log
+
+#### Existing model, analyzer, and renderer boundary
+
+- **Sources Consulted**: `src/flow-model/flowNode.ts`、`src/flow-model/flowEdge.ts`、`src/analyzers/typescript/typescriptAnalyzer.ts`、`src/renderer/mermaidRenderer.ts`、`src/application/visualizeFunctionFlow.ts`、関連 contract / renderer tests。
+- **Findings**:
+  - FlowNode は Break / Continue を独立した discriminated union として持ち、各 node は statement の sourceLocation と静的実行順の order を持つ。
+  - Analyzer は loop context を使い、break を loop 後の最初に到達可能な node へ `break-exit` として接続する。後続がなければ edge を作らず、break は terminal になる。continue は最も内側の loop node へ `continue-loop` として接続する。
+  - Renderer は Break / Continue を処理 Note として表し、continue-loop を Mermaid の循環メッセージとして重複出力しない。不正または表現できない node / edge 組合せは RendererWarning として返す。
+  - FlowDiagnostic と RendererWarning は Application でそれぞれ VisualizationNotice に変換され、Analyzer は Mermaid の表現可否を判断しない。
+- **Implications**:
+  - FlowNode / FlowEdge の設計契約と TypeScriptAnalyzer、MermaidRenderer、Application、VisualizationView の責務を一致させる。
+  - Analyzer の実行順規則または Common Flow Model 変換を変更する場合は analyzer version を更新し、既存の CacheKey によって古い結果を再利用しない。
+
+### Design Decisions
+
+#### Decision: Break / Continue は専用 FlowNode として表現する
+
+- **Alternatives Considered**:
+  1. Break / Continue を expression node の文字列として扱う。
+  2. Break / Continue を edge だけで表し、起点 node を作らない。
+  3. `FlowBreakNode` と `FlowContinueNode` を Common Flow Model の discriminated union として定義する。
+- **Selected Approach**: 3 を採用する。
+- **Rationale**: sourceLocation、order、処理 Note、SourceMap、制御 edge の起点を一つの型安全な契約で保持でき、Renderer が文字列推測を行わずに済む。
+- **Trade-offs**: FlowNode union を利用する Analyzer、Renderer、test fixture の網羅性が必要になる。これは既存の実装契約と一致するため、新しい依存は増えない。
+- **Follow-up**: 入れ子 Call、複数 loop、後続のない break、continue、uncertain edge を含む fixture で制御移動と notice 経路を回帰確認する。
+
+#### Design Synthesis
+
+- **Generalization**: 制御移動は statement text ではなく、sourceLocation と order を持つ FlowNode、および意味を表す FlowEdge の組合せとして表現する。
+- **Build vs. Adopt**: TypeScript Compiler API、既存 Common Flow Model、MermaidRenderer を拡張して利用し、新規 parser、型解析器、Mermaid 拡張は導入しない。
+- **Simplification**: 静的順序不確実性は Analyzer の FlowDiagnostic に限定し、Mermaid 変換の問題は RendererWarning に限定する。両者を相互変換しない。
+
+### Risks & Mitigations
+
+- loop の出口を誤って loop 内へ接続するリスク — `break-exit` の target が loop body 内でないことを Analyzer と Renderer の fixture で検証する。
+- continue を通常の逐次処理として描画するリスク — `continue-loop` は次反復の制御 edge とし、Renderer は循環メッセージを追加しない。
+- 不確実性の表示経路が混在するリスク — FlowDiagnostic と RendererWarning を Application の別変換で検証する。

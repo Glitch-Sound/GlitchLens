@@ -346,3 +346,69 @@ npm run package
 - `@lezer/python` の major update、ノード構造の変更、または parser adapter fixture が失敗する場合。
 - Python 以外の追加言語が locator registry と parser dependency の選択へ影響する場合。
 - package / esbuild が JavaScript bundle 以外の asset または native binary を要求する場合。
+
+## Requirement 6 Design Update: Python ライフライン主体名
+
+### Boundary Commitments
+
+**This Spec Owns**
+
+- Python 構文から、共通 `FlowParticipant` に渡すインスタンス、クラス、役割、および module fallback 候補を抽出すること。
+- Python の Call と root function が共通 Requirement 16 の participant priority と Unknown / Unresolved 規則に従うこと。
+- Python 固有の participant extraction に対する fixture と回帰検証。
+
+**Out of Boundary**
+
+- Python の型推論、import の完全解決、実行時 object / descriptor / `__call__` の同定。
+- Python 専用の Mermaid syntax、WebView 表示処理、Clipboard 経路、または SourceMap 形式。
+
+**Allowed Dependencies**
+
+- `@lezer/python` の Name、MemberExpression、class declaration、source range。
+- 共通 `FlowParticipant` contract、SourceLocation URI、MermaidRenderer。
+
+**Revalidation Triggers**
+
+- Python parser の node 名または class / member expression の構造が変わる場合。
+- 共通 participant priority、label format、key の意味、Unknown / Unresolved の表示を変える場合。
+- Python source URI から module name を導出する規則を変更する場合。
+
+### Architecture Decision
+
+`PythonFlowBuilder` は `calleeName` を操作名として保持しつつ、MemberExpression の左側 Name を instance / role 候補として `FlowParticipant` に変換する。クラス内の root function は enclosing class 名を優先し、top-level function と主体候補のない Call は source URI から導く `: <module>` を使用する。動的な `factory().run()`、index access、`getattr`、または source URI も得られない Call は、既存 resolution に従って `: Unresolved` または `: Unknown` を使う。
+
+この処理は parser adapter と Analyzer の内側に閉じ、Lezer node や Python 固有型を Common Flow Model、Renderer、WebView へ渡さない。共通 Renderer が participant key で集約するため、Python は言語専用の表示ロジックを持たない。
+
+### Python Participant Extraction Contract
+
+| Python source form | Participant candidate | Operation message | Fallback |
+|---|---|---|---|
+| `service.save()` | `service` instance / role | `save` | source module |
+| `ClassName.build()` | `ClassName` class | `build` | source module |
+| class method `def run` | enclosing class | operation names in body | source module |
+| `foo()` | source module | `foo` | Unknown when source is unavailable |
+| `factory().run()` | no reliable candidate | `run` | Unresolved |
+| `items[index]()` / `getattr(...)()` | no reliable candidate | existing safe operation name or unknown call | Unknown / Unresolved |
+
+### File Structure Impact
+
+- `src/analyzers/python/pythonAnalyzer.ts` — source form と enclosing class を読み、Call / root に共通 participant candidate を設定する。
+- `src/flow-model/flowParticipant.ts`、`src/flow-model/flowModel.ts`、`src/flow-model/flowNode.ts` — 共通仕様が定める participant data を利用する。
+- `src/test/pythonFunctionFlow.test.ts` — instance、class、module、Unknown / Unresolved の優先順位と操作名を検証する。
+- `src/test/mermaidRenderer.test.ts`、`src/test/visualizationView.test.ts` — Python Flow Model でも共通 participant title、Mermaid copy、SourceMap が一致することを検証する。
+
+### Requirements Traceability Amendment
+
+| Requirement | Design response |
+|---|---|
+| 6.1 | Python Name / MemberExpression と enclosing class から共通 FlowParticipant を生成する。 |
+| 6.2 | SourceLocation URI から `: <module>` を導出する。 |
+| 6.3 | dynamic call は共通 key の Unknown / Unresolved へ集約する。 |
+| 6.4 | `calleeName` を引数なしの操作 message として維持する。 |
+| 6.5 | Python 専用 Renderer / WebView 分岐を追加せず、共通 Renderer contract を使用する。 |
+
+### Testing Strategy Amendment
+
+- `pythonFunctionFlow.test.ts` で `service.save()`、class method、top-level `foo()`、`factory().run()`、computed / `getattr` を解析し、participant kind / label と operation name を確認する。
+- 共通 Renderer fixture で、Python の同一 participant が集約され、異なる participant の同名 operation が分離され、Unknown / Unresolved が各一つであることを確認する。
+- 既存の `process_orders` fixture を participant contract 付きで再検証し、実行順、diagnostic、SourceMap、Mermaid text のコピーが維持されることを確認する。

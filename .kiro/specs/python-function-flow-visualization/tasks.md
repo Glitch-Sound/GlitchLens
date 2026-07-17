@@ -119,10 +119,28 @@
   - _Requirements: Python 1.1-5.6、共通 15.1-15.5_
   - _Design: Python「Test Strategy」「Revalidation Triggers」、共通「Cross-language Execution Order and Loop Control」_
 
+- [ ] 10. Python のライフライン主体候補を共通契約へ供給する
+  - Name、MemberExpression、enclosing class、source URI から、instance / class / module の優先順位で participant candidate を抽出する。
+  - `foo()` と `factory().run()` の操作名を保持し、候補がない場合は共通 Unknown / Unresolved participant を使用する。
+  - Observable completion: Python Flow Model fixture で participant label / key と operation name が確認でき、Python 固有の Renderer / WebView 分岐を追加しない。
+  - _Depends: function-flow-visualization 20.1_
+  - _Boundary: PythonAnalyzer_
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
+
+- [ ] 11. Python 主体名表示の共通 Renderer 回帰を検証する
+  - instance、class、module、Unknown、Unresolved の各ケースを共通 MermaidRenderer へ渡し、同一主体の集約と異なる主体の分離を検証する。
+  - `process_orders` と、共通 Task 20.4 で確認済みの TypeScript / JavaScript 回帰結果を突き合わせ、Mermaid copy、SourceMap、diagnostic、処理順、Workspace Trust、ローカル静的解析境界の言語横断契約を再確認する。
+  - Observable completion: Python と既存言語の participant contract 回帰、unit / integration quality gate が成功する。
+  - _Depends: 10, function-flow-visualization 20.1, function-flow-visualization 20.2, function-flow-visualization 20.3, function-flow-visualization 20.4_
+  - _Boundary: PythonAnalyzer tests, MermaidRenderer tests, Integration validation_
+  - _Requirements: 5.5, 6.1, 6.2, 6.3, 6.4, 6.5_
+
 ## Review Gates
 
 - Task 1 完了後: Flow Edge の追加と Renderer の共通意味論を確認する。
 - Task 3 完了後: locator registry が TypeScript 系の CodeLens 契約を維持することを確認する。
 - Task 6 完了後: Python の構文変換が Renderer に Python 固有分岐を要求していないことを確認する。
 - Task 9 完了後: package、統合 test、ローカル静的解析境界の結果を確認して実装完了を判定する。
+- Task 10 完了後: Python の participant candidate が共通 Flow Model contract だけを利用し、Python 固有の Renderer / WebView 分岐を要求しないことを確認する。
+- Task 11 完了後: 共通 Task 20 の participant contract と Python の回帰結果を照合し、Mermaid text、コピー、SourceMap の言語横断契約を確認する。
 - 共通 design の「Cross-language Execution Order and Loop Control」に残る、TypeScript / JavaScript の入れ子 call が将来追従するという記述は、Task 2 が実装済みであることを前提に、共通仕様レビューで実装済み状態へ更新する。この注記自体は共通 requirements.md / design.md を変更しない。
