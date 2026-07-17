@@ -119,7 +119,7 @@
   - _Requirements: Python 1.1-5.6、共通 15.1-15.5_
   - _Design: Python「Test Strategy」「Revalidation Triggers」、共通「Cross-language Execution Order and Loop Control」_
 
-- [ ] 10. Python の共通描画契約を実装する
+- [x] 10. Python の共通描画契約を実装する
 
 - [x] 10.1 Python Call の主体と操作名を共通契約へ変換する
   - 単一識別子 receiver を TypeScript と同じ class / instance participant とし、操作名を主体名と分離する。
