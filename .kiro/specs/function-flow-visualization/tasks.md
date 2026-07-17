@@ -600,7 +600,7 @@
   - _Requirements: 16.6, 16.7_
 
 - [ ] 23. 実行順とライフライン表示の最終統合検証を行う
-- [ ] 23.1 全品質ゲートと回帰検証を実施する
+- [x] 23.1 全品質ゲートと回帰検証を実施する
   - 実行順、Break / Continue、RendererWarning、ライフライン、entry-call、コピー、cache miss を横断 fixture で検証する。
   - `check-types`、`lint`、`compile`、unit test、integration test を実行する。
   - Observable completion: Requirement 15 と 16 の全受け入れ条件、およびコレクション判定・既存可視化契約が品質ゲート成功で確認できる。
