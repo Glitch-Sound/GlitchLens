@@ -517,7 +517,7 @@
   - _Boundary: VisualizationView / CommandController / Integration validation_
   - _Requirements: 14.2, 14.3, 14.4, 14.5_
 
-- [ ] 20. 言語横断の実行順とループ制御を実装する
+- [x] 20. 言語横断の実行順とループ制御を実装する
 - [x] 20.1 Break / Continue の共通制御フロー契約を実装する
   - Break と Continue を、source location と静的な実行順を持つ独立した処理要素として表現する。
   - `break-exit` と `continue-loop` を制御移動 edge の種類として表現できる共通契約を追加する。具体的な到達可能先と後続のない break の扱いは Analyzer task 20.2 で実装する。
@@ -542,7 +542,7 @@
   - _Boundary: MermaidRenderer, Application, VisualizationView_
   - _Requirements: 3.4, 6.2, 8.5, 15.5_
 
-- [ ] 21. 指定関数を起点とするライフラインとメッセージを実装する
+- [x] 21. 指定関数を起点とするライフラインとメッセージを実装する
 - [x] 21.1 Call 専用のライフライン主体契約を追加する
   - Call がクラス、インスタンス、Unknown、Unresolved の主体情報を持てるようにし、Unknown と Unresolved は別々の固定 key へ集約する。
   - 指定関数の root は主体情報に含めず、Renderer が無題の固定ライフラインとして扱える状態にする。
@@ -574,7 +574,7 @@
   - _Boundary: VisualizationView, ClipboardAdapter, Integration validation_
   - _Requirements: 14.4, 16.6_
 
-- [ ] 22. 関数先頭の要求メッセージを省略せずに描画する
+- [x] 22. 関数先頭の要求メッセージを省略せずに描画する
 - [x] 22.1 Mermaid Renderer の entry-call 描画を実装する
   - 先行する FlowEdge を持たない Call のうち最初のものを、無題 root からの要求メッセージとして一度だけ出力する。
   - 表示専用の entry として扱い、Analyzer、Common Flow Model、diagnostic、キャッシュへ人工的な node、edge、warning を追加しない。
@@ -599,7 +599,7 @@
   - _Boundary: VS Code Integration validation_
   - _Requirements: 16.6, 16.7_
 
-- [ ] 23. 実行順とライフライン表示の最終統合検証を行う
+- [x] 23. 実行順とライフライン表示の最終統合検証を行う
 - [x] 23.1 全品質ゲートと回帰検証を実施する
   - 実行順、Break / Continue、RendererWarning、ライフライン、entry-call、コピー、cache miss を横断 fixture で検証する。
   - `check-types`、`lint`、`compile`、unit test、integration test を実行する。
