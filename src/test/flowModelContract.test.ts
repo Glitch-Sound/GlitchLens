@@ -3,13 +3,29 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import {
+	fallbackParticipant,
 	flowEdgeKinds,
+	flowParticipantKinds,
 	flowNodeKinds,
 	isFlowEdgeKind,
+	namedParticipant,
 	type FlowModel,
 } from '../flow-model';
 
 suite('Common Flow Model contract', () => {
+	test('defines stable FlowParticipant keys and excludes the root function from call participants', () => {
+		assert.deepStrictEqual(flowParticipantKinds, ['instance', 'class', 'unknown', 'unresolved']);
+		assert.deepStrictEqual(namedParticipant('instance', 'cart').key, 'instance:cart');
+		assert.deepStrictEqual(namedParticipant('class', 'CartService'), { key: 'class:CartService', label: 'CartService', kind: 'class' });
+		assert.deepStrictEqual(fallbackParticipant('unknown'), { key: 'unknown', label: 'Unknown', kind: 'unknown' });
+		assert.deepStrictEqual(fallbackParticipant('unresolved'), { key: 'unresolved', label: 'Unresolved', kind: 'unresolved' });
+
+		const root = namedParticipant('class', 'CartService');
+		const calls = [namedParticipant('instance', 'cartService'), fallbackParticipant('unknown')];
+		assert.ok(root);
+		assert.strictEqual(calls.some(participant => participant.key === root?.key), false);
+	});
+
 	test('exposes the stable node and edge kinds required by the design', () => {
 		assert.deepStrictEqual(flowNodeKinds, [
 			'call',

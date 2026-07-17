@@ -543,7 +543,7 @@
   - _Requirements: 3.4, 6.2, 8.5, 15.5_
 
 - [ ] 21. 指定関数を起点とするライフラインとメッセージを実装する
-- [ ] 21.1 Call 専用のライフライン主体契約を追加する
+- [x] 21.1 Call 専用のライフライン主体契約を追加する
   - Call がクラス、インスタンス、Unknown、Unresolved の主体情報を持てるようにし、Unknown と Unresolved は別々の固定 key へ集約する。
   - 指定関数の root は主体情報に含めず、Renderer が無題の固定ライフラインとして扱える状態にする。
   - Observable completion: Flow Model contract test で、Call の主体 kind、key、label、操作名と、root が主体として解決されないことを確認できる。

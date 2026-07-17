@@ -1,4 +1,4 @@
-import type { FlowEdge, FlowModel, FlowNode, SourceLocation } from '../flow-model';
+import { fallbackParticipant, type FlowEdge, type FlowModel, type FlowNode, type SourceLocation } from '../flow-model';
 import { formatMessageLabel } from './messageLabel';
 
 export const rendererWarningKinds = ['unsupported-node', 'unsupported-edge'] as const;
@@ -58,13 +58,12 @@ class RenderContext {
 	private readonly warnings: RendererWarning[] = [];
 	private readonly sourceMap: RenderSourceMapEntry[] = [];
 	private readonly processNoteDecorations: ProcessNoteDecoration[] = [];
-	private nextUnknownParticipant = 1;
 	private nextWarning = 0;
 
 	public constructor(private readonly model: FlowModel) {}
 
 	public render(): RenderResult {
-		this.addParticipant('root', this.model.rootFunction.name);
+		this.addParticipant('root', '');
 		this.prepareParticipants();
 		this.renderParticipants();
 		this.renderEdges();
@@ -387,18 +386,14 @@ class RenderContext {
 	}
 
 	private participantForCall(node: Extract<FlowNode, { kind: 'call' }>): string {
-		if (node.resolution === 'unknown') {
-			const id = `unknown_${this.nextUnknownParticipant++}`;
-			this.addParticipant(id, 'Unknown');
-			return id;
-		}
-		const existing = this.participantIdsByLabel.get(node.calleeName);
+		const participant = node.participant ?? fallbackParticipant(node.resolution);
+		const existing = this.participantIdsByLabel.get(participant.key);
 		if (existing) {
 			return existing;
 		}
-		const id = uniqueParticipantId(sanitizeIdentifier(node.calleeName), this.participants);
-		this.addParticipant(id, node.calleeName);
-		this.participantIdsByLabel.set(node.calleeName, id);
+		const id = uniqueParticipantId(sanitizeIdentifier(participant.label), this.participants);
+		this.addParticipant(id, participant.label);
+		this.participantIdsByLabel.set(participant.key, id);
 		return id;
 	}
 

@@ -3,6 +3,8 @@ export { flowDiagnosticKinds, flowDiagnosticSeverities } from './diagnostics';
 export type { FlowEdge, FlowEdgeId, FlowEdgeKind } from './flowEdge';
 export { flowEdgeKinds, isFlowEdgeKind } from './flowEdge';
 export type { FlowFunction, FlowModel } from './flowModel';
+export type { FlowParticipant, FlowParticipantKind } from './flowParticipant';
+export { fallbackParticipant, flowParticipantKinds, namedParticipant } from './flowParticipant';
 export type {
 	CallResolution,
 	FlowAwaitNode,
@@ -15,8 +17,8 @@ export type {
 	FlowReturnNode,
 	FlowThrowNode,
 	FlowTryCatchNode,
- 	FlowBreakNode,
- 	FlowContinueNode,
+	FlowBreakNode,
+	FlowContinueNode,
 } from './flowNode';
 export { callResolutions, flowNodeKinds, isFlowNodeKind } from './flowNode';
 export type { AnalysisCompleteness, FlowModelMetadata } from './metadata';

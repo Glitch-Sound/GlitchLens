@@ -1,4 +1,5 @@
 import type { SourceLocation } from './sourceLocation';
+import type { FlowParticipant } from './flowParticipant';
 
 export type FlowNodeId = string;
 
@@ -32,6 +33,7 @@ export interface BaseFlowNode {
 export interface FlowCallNode extends BaseFlowNode {
 	readonly kind: 'call';
 	readonly calleeName: string;
+	readonly participant?: FlowParticipant;
 	readonly resolution: CallResolution;
 	readonly targetFunctionIdentifier?: string;
 }
@@ -62,11 +64,13 @@ export interface FlowThrowNode extends BaseFlowNode {
 }
 
 export interface FlowBreakNode extends BaseFlowNode {
+	/** A break statement; it never has a normal `next` edge. */
 	readonly kind: 'break';
 	readonly label?: string;
 }
 
 export interface FlowContinueNode extends BaseFlowNode {
+	/** A continue statement; its control transfer is represented by `continue-loop`. */
 	readonly kind: 'continue';
 	readonly label?: string;
 }

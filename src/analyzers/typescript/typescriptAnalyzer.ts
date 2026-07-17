@@ -2,7 +2,7 @@ import ts from 'typescript';
 
 import type { AnalyzerInput, AnalyzerResult, LanguageAnalyzer } from '../languageAnalyzer';
 import { findFunctionContainingOffset, type FunctionCandidate } from './functionLocator';
-import { fallbackParticipant, moduleParticipant, namedParticipant, type FlowDiagnostic, type FlowEdge, type FlowNode, type FlowModel, type FlowFunction, type FlowParticipant, type SourceLocation } from '../../flow-model';
+import { fallbackParticipant, namedParticipant, type FlowDiagnostic, type FlowEdge, type FlowNode, type FlowModel, type FlowFunction, type FlowParticipant, type SourceLocation } from '../../flow-model';
 
 export class TypeScriptAnalyzer implements LanguageAnalyzer {
 	public readonly id = 'typescript';
@@ -105,7 +105,7 @@ class FlowBuilder {
 
 	public model(): FlowModel {
 		const languageId = this.input.source.languageId as TypeScriptAnalyzer['languageIds'][number];
-		const rootFunction: FlowFunction = { id: `function:${this.candidate.range.startOffset}`, name: this.candidate.name, participant: this.participantForRoot(), sourceLocation: this.location(this.candidate.range.startOffset, this.candidate.range.endOffset, this.candidate.name) };
+		const rootFunction: FlowFunction = { id: `function:${this.candidate.range.startOffset}`, name: this.candidate.name, sourceLocation: this.location(this.candidate.range.startOffset, this.candidate.range.endOffset, this.candidate.name) };
 		const edges = this.orderedEdges();
 		return {
 			metadata: { schemaVersion: '1.0.0', analyzerId: 'typescript', analyzerVersion: '0.6.0', languageId, generatedAt: new Date().toISOString(), sourceDocumentVersion: this.input.source.version, completeness: this.completeness, configurationDigest: this.input.configuration.configurationDigest, rootFunctionIdentifier: rootFunction.id },
@@ -434,13 +434,9 @@ class FlowBuilder {
 			return { calleeName: expression.name.text, participant: this.participantForReceiver(expression.expression), resolution: 'resolved', message: '' };
 		}
 		if (ts.isIdentifier(expression) || expression.kind === ts.SyntaxKind.SuperKeyword) {
-			return { calleeName: expression.getText(this.sourceFile), participant: moduleParticipant(this.input.source.uri) ?? fallbackParticipant('unknown'), resolution: 'resolved', message: '' };
+			return { calleeName: expression.getText(this.sourceFile), participant: fallbackParticipant('unknown'), resolution: 'resolved', message: '' };
 		}
 		return { calleeName: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Call target could not be named statically.' };
-	}
-
-	private participantForRoot(): FlowParticipant {
-		return moduleParticipant(this.input.source.uri) ?? fallbackParticipant('unknown');
 	}
 
 	private participantForReceiver(receiver: ts.Expression): FlowParticipant {
@@ -448,7 +444,7 @@ class FlowBuilder {
 		if (ts.isIdentifier(receiver)) {
 			return namedParticipant(/^[A-Z]/.test(name) ? 'class' : 'instance', name);
 		}
-		return moduleParticipant(this.input.source.uri) ?? fallbackParticipant('unknown');
+		return fallbackParticipant('unknown');
 	}
 
 	private isDynamicReceiver(expression: ts.Expression): boolean {

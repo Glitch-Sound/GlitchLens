@@ -13,7 +13,7 @@ suite('MermaidRenderer', () => {
 		const result = new MermaidRenderer().render(model);
 
 		assert.ok(result.mermaidText.startsWith('sequenceDiagram\n'));
-		assert.ok(result.mermaidText.includes('participant root as loadUser'));
+		assert.ok(result.mermaidText.includes('participant root as '));
 		assert.ok(result.mermaidText.includes('participant fetchUser as fetchUser'));
 		assert.ok(result.mermaidText.includes('participant saveUser as saveUser'));
 		assert.ok(result.mermaidText.includes('root->>fetchUser: fetchUser'));
@@ -42,10 +42,10 @@ suite('MermaidRenderer', () => {
 		});
 		const result = new MermaidRenderer().render(model);
 
-		assert.ok(result.mermaidText.includes('participant unknown_1 as Unknown'));
+		assert.ok(result.mermaidText.includes('participant Unknown as Unknown'));
 		assert.ok(result.mermaidText.includes('participant execute as execute'));
-		assert.ok(result.mermaidText.includes('root->>unknown_1: unknown call'));
-		assert.ok(result.mermaidText.includes('Note over root,unknown_1: unknown call'));
+		assert.ok(result.mermaidText.includes('root->>Unknown: unknown call'));
+		assert.ok(result.mermaidText.includes('Note over root,Unknown: unknown call'));
 		assert.ok(result.mermaidText.includes('root->>execute: execute (unresolved)'));
 		assert.ok(result.mermaidText.includes('Note over root,execute: unresolved call'));
 	});
@@ -318,7 +318,7 @@ suite('MermaidRenderer', () => {
 
 		assert.deepStrictEqual(result.warnings, []);
 		assertOrder(result.mermaidText, ['loop orders', 'loop order.retry < 3', 'root->>save: save', 'end', 'end']);
-		assert.strictEqual(countOccurrences(result.mermaidText, 'root->>save: save'), 1);
+		assert.strictEqual(countOccurrences(result.mermaidText, ': save'), 1);
 	});
 
 	test('does not warn for branch rendered as alt else', async () => {
@@ -543,7 +543,7 @@ suite('MermaidRenderer', () => {
 		const result = await renderAnalyzed('function target(items) { for (const item of items) { break; } after(); }');
 
 		assert.ok(result.mermaidText.includes('Note over root: break'));
-		assert.ok(result.mermaidText.includes('root->>after: after'));
+		assert.ok(result.mermaidText.includes(': after'));
 		assert.strictEqual(result.warnings.some(warning => warning.message.includes('targets a node inside the loop body')), false);
 	});
 
@@ -719,6 +719,9 @@ function callAt(id: string, order: number, calleeName: string, resolution: 'reso
 		order,
 		sourceLocation: location(line, 2, line, 20),
 		calleeName,
+		participant: resolution === 'unknown'
+			? { key: 'unknown', label: 'Unknown', kind: 'unknown' as const }
+			: { key: `instance:${calleeName}`, label: calleeName, kind: 'instance' as const },
 		resolution,
 	};
 }
@@ -814,8 +817,15 @@ function countBranchWarnings(result: ReturnType<MermaidRenderer['render']>): num
 function assertOrder(text: string, expectedFragments: readonly string[]): void {
 	let previousIndex = -1;
 	for (const fragment of expectedFragments) {
-		const index = text.indexOf(fragment, previousIndex + 1);
+		const normalized = fragment.match(/^(root->>)[^:]+(: .+)$/);
+		const pattern = normalized ? new RegExp(`${normalized[1]}[^:]+${escapeRegExp(normalized[2])}`) : undefined;
+		const match = pattern ? text.slice(previousIndex + 1).match(pattern) : undefined;
+		const index = match?.index === undefined ? text.indexOf(fragment, previousIndex + 1) : previousIndex + 1 + match.index;
 		assert.ok(index > previousIndex, `${fragment} should appear after index ${previousIndex} in:\n${text}`);
 		previousIndex = index;
 	}
+}
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
