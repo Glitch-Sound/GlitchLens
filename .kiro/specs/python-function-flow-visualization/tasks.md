@@ -256,7 +256,7 @@
   - _Boundary: PythonAnalyzer_
   - _Requirements: 2.2, 2.3, 3.1, 4.1, 4.2, 6.1, 6.4, 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 16.2 Python Flow Model と共通 MermaidRenderer の自己呼び出し回帰を追加する
+- [x] 16.2 Python Flow Model と共通 MermaidRenderer の自己呼び出し回帰を追加する
   - `self.method()`、await、nested self call、通常 receiver、direct / dynamic call、return、raise、partial result を共通 Renderer へ渡し、実行順と未解決規則を検証する。
   - root のネスト activation と Note、追加 participant / self arrow の不在、SourceMap、caller entry、root return を共通出力として検証する。
   - Observable completion: Python fixture が自己呼び出し Note と対称な activation を出力し、通常 / 未解決呼び出しと terminal 表示の既存期待値を維持する。

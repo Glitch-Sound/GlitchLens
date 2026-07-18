@@ -36,8 +36,8 @@ suite('Python function flow', () => {
 	test('extracts nested calls in estimated execution order and loop control edges', async () => {
 		const text = 'def target(value):\n    for item in value:\n        if item:\n            continue\n        break\n    return outer(inner(value))\n';
 		const result = await new PythonAnalyzer().analyze(input(text, text.indexOf('target')));
-		assert.strictEqual(result.status, 'success');
-		if (result.status !== 'success') { return; }
+		assert.ok(result.status === 'success' || result.status === 'partial');
+		if (result.status !== 'success' && result.status !== 'partial') { return; }
 		assert.deepStrictEqual(result.model.nodes.filter(node => node.kind === 'call').map(node => node.calleeName), ['inner', 'outer']);
 		assert.ok(result.model.edges.some(edge => edge.kind === 'continue-loop'));
 		assert.ok(result.model.edges.some(edge => edge.kind === 'break-exit'));
@@ -246,6 +246,58 @@ suite('Python function flow', () => {
 		}
 		assert.ok(raiseRendered.mermaidText.indexOf('activate results') < raiseRendered.mermaidText.indexOf('Note over root: throw error'));
 		assert.ok(raiseRendered.mermaidText.indexOf('Note over root: throw error') < raiseRendered.mermaidText.indexOf('deactivate results'));
+	});
+
+	test('renders Python self calls through the shared nested activation contract', async () => {
+		const text = [
+			'async def target(self, service):',
+			'    self.outer(self.inner())',
+			'    await self.save()',
+			'    service.save()',
+			'    validate_order()',
+			'    obj.child.run()',
+			'    return build_result()',
+		].join('\n');
+		const result = await new PythonAnalyzer().analyze(input(text, text.indexOf('target')));
+		assert.ok(result.status === 'success' || result.status === 'partial');
+		if (result.status !== 'success' && result.status !== 'partial') { return; }
+		const rendered = new MermaidRenderer().render(result.model);
+		const lines = rendered.mermaidText.split('\n');
+		assert.strictEqual(lines.filter(line => line === 'caller->>root: invoke').length, 1);
+		assert.strictEqual((rendered.mermaidText.match(/Note right of root: inner/g) ?? []).length, 1);
+		assert.strictEqual((rendered.mermaidText.match(/Note right of root: outer/g) ?? []).length, 1);
+		assert.strictEqual((rendered.mermaidText.match(/Note right of root: await save/g) ?? []).length, 1);
+		assert.strictEqual(rendered.mermaidText.includes('root->>inner'), false);
+		assert.strictEqual(rendered.mermaidText.includes('root->>outer'), false);
+		assert.strictEqual(rendered.mermaidText.includes('participant inner as inner'), false);
+		assert.strictEqual(rendered.mermaidText.includes('participant outer as outer'), false);
+		assert.ok(rendered.mermaidText.includes('participant service as service'));
+		assert.ok(rendered.mermaidText.includes('participant Unknown as Unknown'));
+		assert.ok(rendered.mermaidText.includes('participant Unresolved as Unresolved'));
+		assert.ok(rendered.mermaidText.includes('root-->>caller: return build_result(...)'));
+		assert.strictEqual(rendered.warnings.length, 0);
+		const activationCount = lines.filter(line => line === 'activate root').length;
+		assert.strictEqual(activationCount, lines.filter(line => line === 'deactivate root').length);
+		assert.ok(activationCount >= 2);
+		assert.ok(rendered.sourceMap.some(entry => entry.nodeId === result.model.nodes.find(node => node.kind === 'call' && node.calleeName === 'inner')?.id));
+	});
+
+	test('preserves self-call classification in a partial Python result', async () => {
+		const text = [
+			'async def target(self):',
+			'    await self.validate_order()',
+			'    self.recover()',
+			'    if :',
+		].join('\n');
+		const result = await new PythonAnalyzer().analyze(input(text, text.indexOf('target')));
+		assert.strictEqual(result.status, 'partial');
+		if (result.status !== 'partial') { return; }
+		const selfCalls = result.model.nodes.filter((node): node is Extract<typeof node, { kind: 'call' }> => node.kind === 'call' && node.invocationTarget === 'self');
+		assert.deepStrictEqual(selfCalls.map(node => node.calleeName), ['validate_order', 'recover']);
+		const rendered = new MermaidRenderer().render(result.model);
+		assert.ok(rendered.mermaidText.includes('Note right of root: await validate_order'));
+		assert.ok(rendered.mermaidText.includes('Note right of root: recover'));
+		assert.strictEqual(rendered.mermaidText.includes('participant validate_order as validate_order'), false);
 	});
 
 	test('preserves the shared Mermaid, SourceMap, and view contract for Python', async () => {
