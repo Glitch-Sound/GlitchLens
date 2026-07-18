@@ -163,3 +163,29 @@
 - Task 11 完了後: Mermaid text、コピー、SourceMap、CodeLens、Workspace Trust、cache を含む言語横断契約を確認する。
 - Task 12 完了後: Python Flow Model が共通の `self` root 契約を利用し、Python 専用の Renderer / WebView 分岐を必要としないことを確認する。
 - 共通 design の「Cross-language Execution Order and Loop Control」に残る、TypeScript / JavaScript の入れ子 call が将来追従するという記述は、Task 2 が実装済みであることを前提に、共通仕様レビューで実装済み状態へ更新する。この注記自体は共通 requirements.md / design.md を変更しない。
+
+## 活性化契約の追加タスク
+
+- [x] 13. Python の共通 Mermaid 活性化契約を回帰検証する
+
+- [x] 13.1 Python Flow Model の活性化出力を検証する
+  - `results.append()`、`await service.save()`、入れ子 Call、`return results`、`raise error` を含む Python fixture を共通 Renderer へ渡し、静的な処理順と活性化期間を検証する。
+  - `self`、静的に識別可能な participant、Unknown / Unresolved、partial result で、Python 固有の活性化データや描画分岐を追加しない。
+  - Observable completion: Python fixture の正規 Mermaid テキストに活性化命令が含まれ、Call / Await / Return / Throw の順序、participant、SourceMap、process note の行番号が共通契約に一致する。
+  - _Depends: function-flow-visualization:25.1_
+  - _Boundary: Python flow regression, MermaidRenderer tests_
+  - _Requirements: 2.13, 2.14, 3.6, 6.7_
+
+- [x] 13.2 Python の表示・コピー完全一致を統合検証する
+  - Python の WebView 描画入力、詳細表示、Clipboard、fallback が、活性化命令を含む同一の正規 Mermaid テキストを利用することを検証する。
+  - TypeScript / JavaScript の既存経路と比較し、Python 専用の Renderer / WebView / Clipboard 分岐、Workspace Trust・SourceMap・unknown / unresolved・partial result の回帰がないことを確認する。
+  - `npm run check-types`、`npm run lint`、`npm run test:unit`、`npm run compile`、`npm run test:integration`、`npm run package` を実行する。
+  - Observable completion: Python の表示 Mermaid と Clipboard 内容が byte-for-byte で一致し、共通活性化契約を含む全品質ゲートが成功する。
+  - _Depends: function-flow-visualization:25.2, 13.1_
+  - _Boundary: Python flow regression, VisualizationView, ClipboardAdapter, Integration validation_
+  - _Requirements: 3.6, 5.5, 5.7, 6.5, 6.6, 6.7_
+
+## 活性化契約のレビューゲート
+
+- Task 13.1 完了後: Python Flow Model が共通 Renderer へ活性化専用の言語別データを渡さず、Call / Await / Return / Throw の順序だけで共通契約を満たすことを確認する。
+- Task 13.2 完了後: 共通 Task 25 の正規 Mermaid 出力が Python の WebView、Clipboard、fallback、SourceMap、process note に同一に伝播することを確認する。

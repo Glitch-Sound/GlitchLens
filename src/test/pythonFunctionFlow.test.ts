@@ -167,6 +167,54 @@ suite('Python function flow', () => {
 		assert.strictEqual(raiseRendered.mermaidText.includes('throw raise'), false);
 	});
 
+	test('keeps Python call, await, return, raise, and activation order in the shared Renderer', async () => {
+		const callText = [
+			'async def target(service, results):',
+			'    results.append(1)',
+			'    await service.save()',
+			'    return results',
+		].join('\n');
+		const callResult = await new PythonAnalyzer().analyze(input(callText, callText.indexOf('target')));
+		assert.strictEqual(callResult.status, 'success');
+		if (callResult.status !== 'success') { return; }
+		const callRendered = new MermaidRenderer().render(callResult.model);
+		assert.ok(callRendered.mermaidText.includes('participant root as self'));
+		assert.ok(callRendered.mermaidText.includes('root->>results: append'));
+		assert.ok(callRendered.mermaidText.includes('root->>service: await save'));
+		assert.ok(callRendered.mermaidText.includes('service-->>root: return results'));
+		assert.ok(callRendered.mermaidText.indexOf('root->>results') < callRendered.mermaidText.indexOf('root->>service'));
+		assert.ok(callRendered.mermaidText.indexOf('root->>service') < callRendered.mermaidText.indexOf('service-->>root'));
+		assert.ok(callRendered.mermaidText.includes('activate root'));
+		assert.ok(callRendered.mermaidText.includes('activate results'));
+		assert.ok(callRendered.mermaidText.includes('activate service'));
+		assert.strictEqual(callRendered.warnings.length, 0);
+
+		const nestedText = 'def target(service, helper):\n    return service.outer(helper.inner())';
+		const nestedResult = await new PythonAnalyzer().analyze(input(nestedText, nestedText.indexOf('target')));
+		assert.strictEqual(nestedResult.status, 'success');
+		if (nestedResult.status !== 'success') { return; }
+		const nestedRendered = new MermaidRenderer().render(nestedResult.model);
+		assert.ok(nestedRendered.mermaidText.indexOf('root->>helper: inner') < nestedRendered.mermaidText.indexOf('root->>service: outer'));
+		assert.ok(nestedRendered.mermaidText.indexOf('activate helper') < nestedRendered.mermaidText.indexOf('deactivate helper'));
+		assert.ok(nestedRendered.mermaidText.indexOf('activate service') < nestedRendered.mermaidText.indexOf('service-->>root: return'));
+		assert.ok(nestedRendered.mermaidText.includes('participant helper as helper'));
+		assert.ok(nestedRendered.mermaidText.includes('participant service as service'));
+
+		const raiseText = 'def target(results):\n    results.append(1)\n    raise error';
+		const raiseResult = await new PythonAnalyzer().analyze(input(raiseText, raiseText.indexOf('target')));
+		assert.strictEqual(raiseResult.status, 'success');
+		if (raiseResult.status !== 'success') { return; }
+		const raiseRendered = new MermaidRenderer().render(raiseResult.model);
+		assert.ok(raiseRendered.mermaidText.includes('root->>results: append'));
+		assert.ok(raiseRendered.mermaidText.includes('Note over root: throw error'));
+		assert.ok(raiseRendered.mermaidText.indexOf('root->>results') < raiseRendered.mermaidText.indexOf('Note over root: throw error'));
+		for (const decoration of raiseRendered.processNoteDecorations) {
+			assert.strictEqual(raiseRendered.mermaidText.split('\n')[decoration.mermaidLine - 1], 'Note over root: throw error');
+		}
+		assert.ok(raiseRendered.mermaidText.indexOf('activate results') < raiseRendered.mermaidText.indexOf('Note over root: throw error'));
+		assert.ok(raiseRendered.mermaidText.indexOf('Note over root: throw error') < raiseRendered.mermaidText.indexOf('deactivate results'));
+	});
+
 	test('preserves the shared Mermaid, SourceMap, and view contract for Python', async () => {
 		const text = [
 			'async def process_orders(service, logger):',
@@ -217,6 +265,9 @@ suite('Python function flow', () => {
 		const view = createVisualizationViewModel(result);
 		assert.strictEqual(view.mermaidText, result.mermaidText);
 		assert.strictEqual(view.fallbackText, result.mermaidText);
+		const fallbackView = createVisualizationViewModel(result, { forceFallback: true });
+		assert.strictEqual(fallbackView.fallbackText, result.mermaidText);
+		assert.strictEqual(fallbackView.mermaidText, result.mermaidText);
 		assert.deepStrictEqual(view.sourceMap, result.sourceMap);
 
 		const factory = new PythonStubPanelFactory();
@@ -225,6 +276,9 @@ suite('Python function flow', () => {
 		const adapter = new WebviewVisualizationAdapter(factory, clipboard, notifications);
 		await adapter.show(view);
 		assert.ok(factory.panel.webview.html.includes('participant root as self'));
+		assert.ok(factory.panel.webview.html.includes('activate root'));
+		assert.ok(factory.panel.webview.html.includes('activate service'));
+		assert.ok(view.mermaidText && result.mermaidText === view.mermaidText);
 		await adapter.copyCurrentMermaidForTest();
 		assert.deepStrictEqual(clipboard.writes, [result.mermaidText]);
 		assert.deepStrictEqual(notifications.messages, ['info:Mermaid text copied.']);
