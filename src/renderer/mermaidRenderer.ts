@@ -87,7 +87,7 @@ class RenderContext {
 
 	private prepareParticipants(): void {
 		for (const node of this.orderedNodes()) {
-			if (node.kind === 'call') {
+			if (node.kind === 'call' && node.invocationTarget !== 'self') {
 				this.nodeParticipants.set(node.id, this.participantForCall(node));
 			}
 		}
@@ -353,6 +353,10 @@ class RenderContext {
 	}
 
 	private renderCall(node: Extract<FlowNode, { kind: 'call' }>, edge?: FlowEdge): void {
+		if (node.invocationTarget === 'self') {
+			this.renderSelfCall(node, edge);
+			return;
+		}
 		const participantId = this.nodeParticipants.get(node.id) ?? this.participantForCall(node);
 		if (edge?.kind === 'uncertain') {
 			const uncertainLine = this.addLine(`Note over root,${participantId}: order uncertain`);
@@ -375,6 +379,20 @@ class RenderContext {
 		this.activateParticipant(participantId);
 		if (!this.hasTerminalContinuation(node.id)) {
 			this.deactivateParticipant(participantId);
+		}
+	}
+
+	private renderSelfCall(node: Extract<FlowNode, { kind: 'call' }>, edge?: FlowEdge): void {
+		if (edge?.kind === 'uncertain') {
+			const uncertainLine = this.addLine('Note over root: order uncertain');
+			this.addSourceMap(edge.sourceLocation ?? node.sourceLocation, node.id, edge.id, uncertainLine);
+		}
+		const message = `${edge && this.isAwaitedCall(edge) ? 'await ' : ''}${node.calleeName}`;
+		this.activateParticipant('root');
+		const line = this.addLine(`Note right of root: ${escapeText(message)}`);
+		this.addSourceMap(node.sourceLocation, node.id, edge?.id, line);
+		if (!this.hasSelfContinuation(node.id)) {
+			this.deactivateParticipant('root');
 		}
 	}
 
@@ -460,6 +478,13 @@ class RenderContext {
 		return this.outgoingEdges(nodeId, ['next', 'return', 'throw', 'uncertain']).some(edge => {
 			const target = this.nodeById(edge.targetNodeId);
 			return target?.kind === 'return' || target?.kind === 'throw';
+		});
+	}
+
+	private hasSelfContinuation(nodeId: string): boolean {
+		return this.outgoingEdges(nodeId, ['next', 'return', 'throw', 'uncertain']).some(edge => {
+			const target = this.nodeById(edge.targetNodeId);
+			return target?.kind === 'call' && target.invocationTarget === 'self';
 		});
 	}
 

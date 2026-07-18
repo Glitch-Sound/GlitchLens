@@ -174,6 +174,72 @@ suite('MermaidRenderer', () => {
 		assert.strictEqual(lines.filter(line => line === 'activate root').length, 1);
 	});
 
+	test('renders self invocations as nested root activation notes without a participant', () => {
+		const selfCall = {
+			...callAt('node:self-call', 1, 'validate', 'resolved', 2),
+			participant: undefined,
+			invocationTarget: 'self' as const,
+		};
+		const result = new MermaidRenderer().render(createModel({
+			nodes: [selfCall],
+			edges: [edge('edge:self-call', selfCall.id, 1)],
+		}));
+		const lines = result.mermaidText.trimEnd().split('\n');
+		assert.strictEqual(lines.includes('participant validate as validate'), false);
+		assert.strictEqual(lines.includes('participant Unknown as Unknown'), false);
+		assert.strictEqual(lines.filter(line => line === 'activate root').length, 2);
+		assert.strictEqual(lines.filter(line => line === 'deactivate root').length, 2);
+		assert.ok(result.mermaidText.includes('Note right of root: validate'));
+		assert.strictEqual(result.mermaidText.includes('root->>validate'), false);
+		const noteLine = lines.indexOf('Note right of root: validate');
+		assert.ok(lines.indexOf('activate root') < noteLine);
+		assert.ok(noteLine < lines.lastIndexOf('deactivate root'));
+		assert.ok(result.sourceMap.some(entry => entry.nodeId === selfCall.id && entry.edgeId === 'edge:self-call'));
+	});
+
+	test('renders awaited self invocations once and preserves nested ordering', () => {
+		const selfCall = {
+			...callAt('node:self-await', 2, 'save', 'resolved', 3),
+			participant: undefined,
+			invocationTarget: 'self' as const,
+		};
+		const awaitNode = {
+			id: 'node:self-await-owner', kind: 'await' as const, order: 1,
+			sourceLocation: location(2, 2, 2, 18), expression: 'this.save()',
+		};
+		const result = new MermaidRenderer().render(createModel({
+			nodes: [awaitNode, selfCall],
+			edges: [edge('edge:self-await', selfCall.id, 1, 'next', awaitNode.id)],
+		}));
+		const lines = result.mermaidText.trimEnd().split('\n');
+		assert.strictEqual(lines.filter(line => line === 'Note right of root: await save').length, 1);
+		assert.strictEqual(lines.filter(line => line === 'activate root').length, 2);
+		assert.strictEqual(lines.filter(line => line === 'deactivate root').length, 2);
+		assert.ok(result.sourceMap.some(entry => entry.nodeId === selfCall.id && entry.edgeId === 'edge:self-await'));
+	});
+
+	test('keeps chained self invocations nested in execution order', () => {
+		const inner = { ...callAt('node:self-inner', 1, 'inner', 'resolved', 2), participant: undefined, invocationTarget: 'self' as const };
+		const outer = { ...callAt('node:self-outer', 2, 'outer', 'resolved', 3), participant: undefined, invocationTarget: 'self' as const };
+		const result = new MermaidRenderer().render(createModel({
+			nodes: [inner, outer],
+			edges: [edge('edge:self-inner', inner.id, 1), edge('edge:self-outer', outer.id, 2, 'next', inner.id)],
+		}));
+		const lines = result.mermaidText.trimEnd().split('\n');
+		assert.strictEqual(lines.filter(line => line === 'activate root').length, 3);
+		assert.strictEqual(lines.filter(line => line === 'deactivate root').length, 3);
+		assert.ok(lines.indexOf('Note right of root: inner') < lines.indexOf('Note right of root: outer'));
+		const activations = lines.flatMap((line, index) => line === 'activate root' ? [index] : []);
+		const deactivations = lines.flatMap((line, index) => line === 'deactivate root' ? [index] : []);
+		assert.ok(activations[1] < lines.indexOf('Note right of root: inner'));
+		assert.ok(activations[2] < lines.indexOf('Note right of root: outer'));
+		assert.ok(lines.indexOf('Note right of root: outer') < deactivations[0]);
+		assert.ok(deactivations[0] < deactivations[1]);
+		assert.ok(deactivations[1] < deactivations[2]);
+		assert.ok(result.sourceMap.some(entry => entry.nodeId === inner.id && entry.edgeId === 'edge:self-inner'));
+		assert.ok(result.sourceMap.some(entry => entry.nodeId === outer.id && entry.edgeId === 'edge:self-outer'));
+	});
+
 	test('keeps a call activation open for a terminal reached by a next edge', () => {
 		const result = new MermaidRenderer().render(createModel({
 			edges: [

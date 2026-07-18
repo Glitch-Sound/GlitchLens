@@ -744,7 +744,7 @@
   - _Boundary: TypeScriptAnalyzer_
   - _Requirements: 18.1, 18.4, 18.5_
 
-- [ ] 28.3 (P) 自己呼び出しを root の活性化と Note で描画する
+- [x] 28.3 (P) 自己呼び出しを root の活性化と Note で描画する
   - 自己呼び出しのための participant または自己宛て message arrow を出力せず、既存 root の活性化を一段ネストして操作名の Note を出力する。
   - await を伴う呼び出しでは `await` を一度だけ表示し、Note を Call と Await→Call edge の元コード対応として扱う。
   - Observable completion: Renderer fixture が通常・await・nested self call で対称な root activation、Note、SourceMap を返し、追加の self / Unknown / Unresolved participant を出力しない。
