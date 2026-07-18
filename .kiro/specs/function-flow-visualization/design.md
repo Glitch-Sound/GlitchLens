@@ -1129,7 +1129,7 @@ flowchart TD
 
 **This Spec Owns**
 
-- 指定関数を最も左の `self` ライフラインとして出力する Mermaid 表示契約。
+- 未特定の外部 caller を最も左、指定関数をその右の `self` ライフラインとして出力する Mermaid 表示契約。
 - Call ごとにクラス名またはインスタンス名だけを保持する、言語非依存の `FlowParticipant` 契約。
 - `calleeName` を要求メッセージとして表示し、同じ participant key の呼び出しを一つのライフラインへ統合する規則。
 - 識別できない呼び出しを `Unknown` または `Unresolved` の専用ライフラインへ集約する規則。
@@ -1156,7 +1156,7 @@ flowchart TD
 
 ### Architecture Decision
 
-Analyzer は Call にだけ `FlowParticipant` を付与する。指定関数のライフラインは Flow Model の関数名・source URI・participant に依存せず、Renderer が固定 ID `root` と表示名 `self` で最初に出力する。これにより、対象関数名が図に露出せず、常に最左の共通起点になる。内部 ID `root` は WebView の装飾・message・SourceMap の既存契約を維持するため変更しない。
+Analyzer は Call にだけ `FlowParticipant` を付与する。指定関数のライフラインは Flow Model の関数名・source URI・participant に依存せず、Renderer が固定 `caller` の後に固定 ID `root` と表示名 `self` で出力する。これにより、対象関数名と呼び出し元の実在名を図に露出せず、外部 caller と関数内起点を区別する。内部 ID `root` は WebView の装飾・message・SourceMap の既存契約を維持するため変更しない。
 
 Renderer は Flow Model に root 用の node または edge を要求しない。全 FlowEdge の target にならない Call のうち、`order` が最小のものを entry-call として先に描画する。entry-call は `root` から participant への通常の Call message とし、その後は既存の edge traversal で後続を描画する。entry-call は描画済み node として記録するため、後続 edge を処理しても同じ message を重複出力しない。SourceMap は entry-call の nodeId と sourceLocation を保持し、実在しない edgeId を生成しない。
 
@@ -1169,6 +1169,7 @@ flowchart LR
     Syntax[TypeScript / JavaScript syntax] --> Analyzer[TypeScriptAnalyzer]
     Analyzer --> Call[FlowCallNode + FlowParticipant]
     Call --> Renderer[MermaidRenderer]
+    Renderer --> Caller[caller lifeline]
     Renderer --> Root[self root lifeline]
     Renderer --> Target[Class or instance lifeline]
     Renderer --> Fallback[Unknown or Unresolved lifeline]
@@ -1194,7 +1195,7 @@ interface FlowCallNode extends BaseFlowNode {
 ```
 
 - `key` は表示名ではなく主体の同一性を表す。`unknown` と `unresolved` は各一つの固定 key を使う。
-- `label` はクラス名、インスタンス名、`Unknown`、`Unresolved` のいずれかに限定する。`self` は Call participant ではなく root の専用表示規則である。
+- `label` はクラス名、インスタンス名、`Unknown`、`Unresolved` のいずれかに限定する。`caller` と `self` は Call participant ではなく Renderer の専用表示規則である。
 - `calleeName` は引数を含めない要求操作名であり、`MessageLabelFormatter` は既存の `await` と解決状態の表現を維持する。
 - 旧い Flow Model などで `participant` がない Call は、source URI や関数名から導出せず、resolution に対応する専用ライフラインを使用する。
 
@@ -1204,21 +1205,21 @@ interface FlowCallNode extends BaseFlowNode {
 |---|---|---|---|---|
 | TypeScriptAnalyzer | Analyzer | receiver からクラス／インスタンスまたはフォールバックを判定する | 14.2, 16.2, 16.5 | TypeScript Compiler API P0, FlowParticipant P0 |
 | FlowParticipant contract | Common Flow Model | 呼び出し先の同一性と許可された表示名を保持する | 16.2, 16.4, 16.5 | FlowCallNode P0 |
-| MermaidRenderer | Renderer | `self` root、participant の重複排除、要求メッセージを生成する | 16.1, 16.3, 16.4, 16.5, 16.6 | FlowParticipant P0, MessageLabelFormatter P0 |
+| MermaidRenderer | Renderer | `caller`、`self` root、participant の重複排除、要求メッセージを生成する | 16.1, 16.3, 16.4, 16.5, 16.6 | FlowParticipant P0, MessageLabelFormatter P0 |
 | VisualizationView / ClipboardAdapter | Integration | Renderer の Mermaid text を変更せず表示・コピーする | 16.6 | RenderResult P0 |
 | MermaidRenderer entry traversal | Renderer | 入辺のない先頭 Call を root 起点で一度だけ描画する | 16.7 | FlowNode.order P0, FlowEdge P0, FlowParticipant P0 | Service |
 
 - `src/flow-model/flowParticipant.ts` — `instance`、`class`、`unknown`、`unresolved` だけを表す型と、フォールバックの不変条件を定義する。
 - `src/flow-model/flowModel.ts`、`src/flow-model/flowNode.ts`、`src/flow-model/index.ts` — Call participant contract を公開する。root のタイトルは保持しない。
 - `src/analyzers/typescript/typescriptAnalyzer.ts` — receiver の静的識別、`Array` クラスへの標準コレクションメソッドの割当て、フォールバック生成を担う。
-- `src/renderer/mermaidRenderer.ts` — 内部 ID `root` を表示名 `self` で先頭出力し、participant key による統合、entry-call の選択、`calleeName` メッセージの出力を担う。
+- `src/renderer/mermaidRenderer.ts` — 固定 `caller` の後に内部 ID `root` を表示名 `self` で出力し、participant key による統合、entry-call の選択、`calleeName` メッセージの出力を担う。
 - `src/test/mermaidRenderer.test.ts` — edge を持たない先頭 Call の message、SourceMap、重複排除、後続 Call との順序を検証する。
 - `src/test/extension.test.ts` — cursor、CodeLens、Clipboard が先頭 Call を含む Mermaid text を表示・コピーすることを統合検証する。
 - `src/test/flowModelContract.test.ts`、`src/test/typescriptFlowExtractor.test.ts`、`src/test/visualizationView.test.ts` — 既存 contract、解析、表示、コピーの回帰を検証する。
 
 ### Testing Strategy Amendment
 
-- Renderer test で、指定関数が常に最左の内部 ID `root` participant となり、表示名が `self` で関数名を含まないことを検証する。
+- Renderer test で、固定 `caller` が最左、その右の内部 ID `root` participant の表示名が `self` となり、呼び出し元・対象関数の実在名を含まないことを検証する。
 - Analyzer / Flow Model test で、`service.save()` は `service`、`Repository.find()` は `Repository`、標準コレクションメソッドは `Array` の participant を持つことを検証する。
 - Renderer test で、同一インスタンスの複数操作が一つのライフラインに統合され、別インスタンスの同名操作は分離され、メッセージには操作名だけが表示されることを検証する。
 - direct call、chain call、optional call、computed call を含む test で、モジュール名・ファイル名・関数名を代替タイトルにせず、`Unknown` または `Unresolved` が各一つに集約されることを検証する。
@@ -1277,6 +1278,82 @@ sequenceDiagram
     WebView->>WebView: 同じ mermaidText を描画
     WebView->>Clipboard: 同じ mermaidText をコピー
 ```
+
+## 関数 return の caller 表現
+
+### Boundary Commitments Amendment
+
+**This Spec Owns**
+
+- 対象関数の外部呼び出し元を表す固定 `caller` participant と、その右の固定 `root` / 表示名 `self` participant を含む正規 Mermaid の出力順。
+- 関数本体より前に、固定 `caller` から `root` / 表示名 `self` へ対象関数の開始を示す synthetic entry message を一度だけ出力する共通 Renderer 契約。
+- Return node を、直前の Call participant ではなく常に `root` から `caller` への応答メッセージとして出力する共通 Renderer 契約。
+- return message の送信元・送信先と、関数内 Call participant の活性化終了を別の責務として維持すること。
+- TypeScript / JavaScript と Python の Renderer 回帰、SourceMap、WebView 表示、Clipboard コピーにおける caller を含む正規 Mermaid text の整合性。
+
+**Out of Boundary**
+
+- 呼び出し元の関数名、クラス名、モジュール名、ファイル名、実行時の呼び出し階層を静的解析または実行によって特定すること。
+- Common Flow Model、FlowParticipant、Language Analyzer に caller を公開すること。
+- throw の既存 Note 表示、Python 専用の Mermaid / WebView / Clipboard 分岐、呼び出し先関数本体の解析。
+
+**Allowed Dependencies**
+
+- 既存の `MermaidRenderer`、`RenderContext`、`FlowReturnNode`、FlowEdge の順序、`MessageLabelFormatter`、`RenderSourceMapEntry`、VisualizationView、Clipboard。
+- Mermaid sequence diagram の既存 response message、`activate`、`deactivate` 構文。新規ライブラリは使用しない。
+
+**Revalidation Triggers**
+
+- 固定 participant の宣言順、return node / edge の意味、`RenderContext.renderReturn()` の出力順、または活性化終了規則を変更する場合。
+- synthetic entry message の送信元・送信先・出力順、またはその表示・コピーの共有契約を変更する場合。
+- FlowParticipant / FlowModel に caller を追加する場合、または Analyzer が caller の名前解決を担うようになる場合。
+- SourceMap の return 行対応、WebView の描画入力、Clipboard payload、return message の SVG 装飾を変更する場合。
+
+### Architecture Decision
+
+`caller` は静的解析結果ではなく、function-first 図における未特定の外部呼び出し元を示す Renderer 固定 participant とする。`FlowModel` と `FlowParticipant` は関数内の静的フローだけを表す既存の責務を維持し、caller 名を含めない。`RenderContext` は participant を `caller`、`root`、関数内 Call participant の順に宣言する。
+
+`RenderContext` は participant 宣言の後、関数本体に属する最初の FlowNode より前に一度だけ `caller->>root: invoke` を出力する。これは対象関数への外部呼び出しを読み手に示す synthetic message であり、実在する呼び出し元、関数名、クラス名、モジュール名、ファイル名を推測しない。synthetic message は FlowNode / FlowEdge を新設せず、SourceMap のコードジャンプ対象にもならない。`root` の activation はこの入口 message の後に開始し、関数内の Call / Await / Return / Throw の既存順序・activation・diagnostic を変更しない。
+
+Return node を描画するとき、`RenderContext` は常に `root-->>caller: return …` を出力する。直前の Call edge は return message の送信元を決めない。Call participant が terminal continuation により活性化されたままであれば、既存の edge 起点に基づく deactivate を return message の出力後に行う。これにより、callee の活性化終了と対象関数の返却を混同しない。
+
+```mermaid
+sequenceDiagram
+    participant caller
+    participant self
+    participant results
+    caller->>self: invoke
+    self->>results: append
+    activate results
+    results-->>self: complete
+    deactivate results
+    self-->>caller: return results
+```
+
+### File Structure Plan Amendment
+
+- `src/renderer/mermaidRenderer.ts` — Renderer 固定の `caller` participant、宣言順、`caller` から `root` への synthetic entry message、`root` から `caller` への return message、return message と Call participant deactivate の分離を実装する。
+- `src/test/mermaidRenderer.test.ts` — caller / self / callee の participant 順、synthetic entry の一意性と本体前の順序、通常 Call・await・nested Call・Unknown / Unresolved・partial result 後の return 方向、重複 return 抑制、activation、SourceMap 行を検証する。
+- `src/test/visualizationView.test.ts` — caller と synthetic entry を含む正規 Mermaid text が WebView の描画入力と Clipboard の内容で byte-for-byte 一致することを検証する。
+- `src/test/pythonFunctionFlow.test.ts` — **python-function-flow-visualization 仕様所有**。Python Flow Model を共通 Renderer へ渡し、`self-->>caller` を回帰検証する。
+
+### Requirements Traceability Amendment
+
+| Requirement | Summary | Components | Interfaces | Flows |
+|---|---|---|---|---|
+| 13.4 | 要約後も return の正しい方向を維持 | MermaidRenderer, MessageLabelFormatter | RenderResult | return rendering |
+| 16.1, 16.6, 16.8 | caller を左端、self をその右に固定し、caller から self への entry を一度だけ出力して同じ Mermaid text を表示・コピー | MermaidRenderer, VisualizationView | RenderResult | caller entry and return rendering |
+| 17.1, 17.2, 17.4 | return を root から caller へ一度だけ出力し、callee を送信元にしない | MermaidRenderer | FlowReturnNode, FlowEdge | return rendering |
+| 17.3 | callee activation 終了と対象関数の return を分離 | MermaidRenderer | activation stack | return rendering |
+| 17.5, 17.6, 17.8 | caller 名を推測せず、partial / unknown / unresolved と throw の既存規則を維持 | MermaidRenderer, FlowModel | FlowParticipant, FlowReturnNode | return rendering |
+| 17.7 | return の SourceMap と表示・コピーの同一文字列を維持 | MermaidRenderer, VisualizationView | RenderSourceMapEntry, RenderResult | return rendering |
+
+### Testing Strategy Amendment
+
+- `mermaidRenderer.test.ts` は `results.append(); return results`、`await service.save(); return result`、入れ子 Call、Unknown / Unresolved、partial model を入力し、return がいずれも `root-->>caller` であり callee から root への return ではないことを検証する。
+- 同テストは caller の宣言が self より前に一度だけ出力されること、`caller->>root: invoke` が関数本体より前に一度だけ出力され SourceMap の対象にならないこと、return の SourceMap が Return node / edge と同じ正規 Mermaid 行を指すこと、callee の deactivate が return message の後に出ることを検証する。
+- `visualizationView.test.ts` は caller と synthetic entry を含む Renderer 出力を、WebView payload、詳細表示、Clipboard が構造変換なしで共有することを検証する。
+- Python 回帰は `python-function-flow-visualization` 仕様のテスト責務とし、共通 Renderer の言語分岐を追加しないことを確認する。
 
 ### Component and File Structure Impact
 

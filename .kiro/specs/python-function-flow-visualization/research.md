@@ -72,7 +72,27 @@
 - **Trade-offs**: 共通 Renderer の行生成時に活性化命令を扱うため、SourceMap と process note の Mermaid 行番号を正規テキスト基準で回帰検証する必要がある。
 - **Follow-up**: 共通 `function-flow-visualization` 仕様で Renderer / WebView の改修を設計・実装した後、Python の Call / Await / Return / Throw fixture で完全一致を確認する。
 
+### Decision: Python return は共通 caller contract を利用する
+
+- **Context**: Python の `results.append(); return results` で、共通 Renderer が `results` を関数 return の送信元として表示する。
+- **Sources Consulted**: `src/analyzers/python/pythonAnalyzer.ts`、`src/renderer/mermaidRenderer.ts`、`src/test/pythonFunctionFlow.test.ts`、共通 Requirement 17。
+- **Findings**:
+  - PythonAnalyzer は Return node の式と edge を既存 Common Flow Model に出力済みであり、呼び出し元情報を持たない。
+  - 問題は Python AST の変換ではなく、Return node を描画する共通 Renderer の送信元・送信先選択にある。
+  - Python call participant の activation 終了は、対象関数の return sender を決める根拠にはならない。
+- **Selected Approach**: PythonAnalyzer は変更せず、共通 Renderer の固定 caller を利用する。Python 仕様は通常 Call、await、nested Call、Unknown / Unresolved、partial result の return 回帰を所有する。
+- **Rationale**: Python 専用の FlowParticipant、caller 推測、Mermaid / WebView 分岐を追加せず、TypeScript / JavaScript と同じ return 契約を利用できる。
+- **Follow-up**: Python fixture の旧 `callee-->>root: return` 期待値を `root-->>caller: return` と否定 assertion へ置換し、SourceMap と activation の順序を確認する。
+
 ## References
 
 - [Lezer Python](https://github.com/lezer-parser/python) — Python 構文解析の既存基盤
 - [Mermaid Sequence Diagram](https://mermaid.js.org/syntax/sequenceDiagram.html) — 既存 Renderer が出力するシーケンス図構文
+
+### Decision: Python は共通 synthetic entry contract を利用する
+
+- **Context**: Python の図でも、固定 `caller` と `self` の関係を return だけでなく呼び出し開始から追跡できる必要がある。
+- **Sources Consulted**: `src/analyzers/python/pythonAnalyzer.ts`、`src/renderer/mermaidRenderer.ts`、`src/test/pythonFunctionFlow.test.ts`、共通 Requirement 16 / 17。
+- **Selected Approach**: PythonAnalyzer は caller、synthetic node、または entry edge を生成せず、共通 Renderer が固定 `caller->>root: invoke` を出力する。Python spec は共通 entry の順序・一意性・表示／コピー一致を fixture で検証する。
+- **Rationale**: Python 固有の Renderer / WebView / Clipboard 分岐、caller 名推測、SourceMap の架空エントリを追加せず、TypeScript / JavaScript と同じ Mermaid contract を維持できる。
+- **Follow-up**: 通常 Call、await、partial、unknown / unresolved を含む Python fixture で、entry が本体より前に一度だけ現れ、return と activation の既存契約を壊さないことを確認する。

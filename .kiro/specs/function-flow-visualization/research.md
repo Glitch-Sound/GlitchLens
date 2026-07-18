@@ -468,3 +468,81 @@
 - 活性化命令の行追加で SourceMap または process note 行番号がずれるリスク — Renderer の `addLine()` 経路で命令を出力し、行番号の回帰テストを追加する。
 - Call の後に対応する終端がない場合に活性化が閉じないリスク — 既存の静的 FlowEdge と terminal node から閉じる規則を定義し、表現不能な状態を実行時情報で補完しない。
 - WebView の旧後処理が残り二重活性化するリスク — Mermaid 構造の書き換え関数を削除し、WebView が受け取った文字列を直接描画することをテストする。
+
+---
+
+## Requirement 17: caller を含む return 表現の設計調査
+
+### Summary
+
+- 現行 Renderer は Return edge の source Call participant を送信元として `participant-->>root: return` を出力するため、対象関数の return と Call participant の応答を混同する。
+- 呼び出し元は静的 Flow Model に存在しない。caller を Renderer 固定 participant とすれば、Analyzer と Flow Model の責務を拡張せずに `root-->>caller` を正規 Mermaid として出力できる。
+- Call participant の deactivate は return message の送信元とは独立して維持でき、SourceMap、WebView、Clipboard は既存の Renderer 出力経路を再利用できる。
+
+### Research Log
+
+#### Existing return rendering and text propagation
+
+- **Sources Consulted**: `src/renderer/mermaidRenderer.ts`、`src/flow-model/flowModel.ts`、`src/flow-model/flowNode.ts`、`src/flow-model/flowParticipant.ts`、`src/integration/visualizationView.ts`、`src/test/mermaidRenderer.test.ts`、`src/test/pythonFunctionFlow.test.ts`、`src/test/visualizationView.test.ts`。
+- **Findings**:
+  - `renderReturn()` は edge source の call participant を選び、`participant-->>root` を出力する。caller は Renderer、FlowModel、FlowParticipant のいずれにも存在しない。
+  - `RenderContext` は participant 登録順で Mermaid 宣言を出力するため、caller を root より先に登録すれば caller を図の最左に固定できる。
+  - return の Mermaid 行は既に Return node / edge の SourceMap を作成する。正規出力を変えても同じ行生成経路を使えばコード対応は維持できる。
+  - VisualizationView は Renderer の `mermaidText` を WebView payload と Clipboard に同一文字列として渡す。
+- **Implications**:
+  - caller は Renderer 内部の synthetic participant とし、Flow Model 公開契約や Language Analyzer の入力・出力を変更しない。
+  - return message の出力と call participant の deactivate を別操作として扱う必要がある。
+
+### Design Decisions
+
+#### Decision: caller を Renderer 固定 participant とする
+
+- **Alternatives Considered**:
+  1. Return edge の source Call participant を return message の送信元として使い続ける。
+  2. caller を FlowModel / FlowParticipant に追加して各 Analyzer が供給する。
+  3. `MermaidRenderer` が未特定の外部 caller を固定 participant として追加し、Return node を root から caller へ出力する。
+- **Selected Approach**: 3 を採用する。
+- **Rationale**: caller は関数内の静的フローではなく図の外部文脈であり、Renderer 固定 root と同じ層に置くことで Common Flow Model first と Language Analyzer の独立性を維持できる。
+- **Trade-offs**: 図に participant が一つ増え、既存 SourceMap 行番号を参照する fixture は更新を要する。caller の実在名は表示できないが、静的推測を行わない要件に合致する。
+- **Follow-up**: 通常 Call、await、入れ子 Call、Unknown / Unresolved、partial result の後にある return と、表示・コピーの同一文字列を回帰検証する。
+
+#### Design Synthesis
+
+- **Generalization**: 問題は Python の return ではなく、対象関数の終端と関数内 Call の終端を区別する言語横断 Renderer 契約である。
+- **Build vs. Adopt**: Mermaid sequence diagram の既存 response message 構文と既存 Renderer を使用し、新規ライブラリ、外部サービス、Flow Model の caller 型は追加しない。
+- **Simplification**: synthetic caller は一つの固定 participant に限定し、呼び出し元の名称解決、entry call の推測、throw の表現変更は実施しない。
+
+### Risks & Mitigations
+
+- participant 宣言の追加で SourceMap / process note の行番号がずれるリスク — 全行を `RenderContext.addLine()` から出力し、return の SourceMap 行と process note 行を回帰確認する。
+- return と callee deactivate が再結合するリスク — return sender を常に root、deactivate target を edge source Call participant として別々に検証する。
+- WebView または Clipboard が旧 Mermaid text を使用するリスク — VisualizationView の payload と Clipboard の byte-for-byte 回帰 test を追加する。
+
+---
+
+## Requirement 16: caller から self への開始呼び出しの設計調査
+
+### Summary
+
+- 固定 `caller` と `self` の間に synthetic entry message を置くことで、関数本体と return を含む呼び出し全体を読み取れる。
+- entry は関数内の静的 FlowNode / FlowEdge ではないため、FlowModel、Analyzer、SourceMap のコードジャンプ契約を拡張しない。
+- Renderer の正規 Mermaid text に一度だけ出力すれば、WebView と Clipboard は既存の共有経路で一致する。
+
+### Design Decisions
+
+#### Decision: caller から self への入口を Renderer 固定 message とする
+
+- **Alternatives Considered**:
+  1. 呼び出し元の実在する関数名やモジュール名を解析して entry message に使用する。
+  2. FlowModel に synthetic caller node / edge を追加する。
+  3. `MermaidRenderer` が固定 `caller->>root: invoke` を一度だけ出力する。
+- **Selected Approach**: 3 を採用する。
+- **Rationale**: `caller → self → caller` を可視化しつつ、function-first の静的解析境界、FlowModel の関数内フロー責務、caller 名非推測契約を維持できる。
+- **Trade-offs**: entry message は元コードの FlowNode / FlowEdge ではないため、SourceMap のコードジャンプ対象にはならない。
+- **Follow-up**: entry が本体前に一度だけ出力され、WebView と Clipboard が同じ正規 Mermaid text を共有することを回帰検証する。
+
+#### Design Synthesis
+
+- **Generalization**: caller は静的な呼び出し解決の結果ではなく、対象関数の外部文脈を示す Renderer 固定の participant と message である。
+- **Build vs. Adopt**: Mermaid sequence diagram の既存 request message 構文と既存 Renderer を利用し、新規ライブラリを導入しない。
+- **Simplification**: caller 名の解決、synthetic FlowModel node、entry 用 SourceMap、言語別 Renderer 分岐を追加しない。

@@ -12,6 +12,16 @@ suite('MessageLabelFormatter', () => {
 		assert.strictEqual(label, 'return JSON.stringify(...)');
 	});
 
+	test('summarizes nested member return calls without duplicating the return keyword', () => {
+		const label = formatMessageLabel({
+			kind: 'return',
+			expression: 'service.builder.create({ value: helper.transform(input) })',
+		}, defaultMessageLabelPolicy);
+
+		assert.strictEqual(label, 'return service.builder.create(...)');
+		assert.strictEqual((label.match(/\breturn\b/g) ?? []).length, 1);
+	});
+
 	test('keeps call identity and resolution markers', () => {
 		assert.strictEqual(formatMessageLabel({ kind: 'call', calleeName: 'saveUser', awaited: true }, defaultMessageLabelPolicy), 'await saveUser');
 		assert.strictEqual(formatMessageLabel({ kind: 'call', calleeName: 'execute', resolution: 'unresolved' }, defaultMessageLabelPolicy), 'execute (unresolved)');
