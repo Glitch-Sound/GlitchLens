@@ -378,6 +378,72 @@ suite('Python function flow', () => {
 			assert.strictEqual(mermaid.includes('service-->>root: return result'), false);
 		}
 	});
+
+	test('keeps Python caller entry Mermaid byte-for-byte across Webview, fallback, and Clipboard', async () => {
+		const text = [
+			'class OrdersService:',
+			'    async def process_orders(self, service):',
+			'        await service.save()',
+			'        return result',
+		].join('\n');
+		const source = { uri: 'file:///workspace/orders_service.py', languageId: 'python', version: 2, text } as const;
+		const candidate = new PythonFunctionLocator().findFunctionContainingOffset(source, text.indexOf('process_orders'));
+		assert.strictEqual(candidate.status, 'found');
+		if (candidate.status !== 'found') { return; }
+		const result = await new VisualizeFunctionFlowUseCase(new AnalyzerRegistry([new PythonAnalyzer()]), new MermaidRenderer()).execute({
+			source,
+			cursorOffset: text.indexOf('process_orders'),
+			functionRange: candidate.function.range,
+			configuration: { configurationDigest: 'python-entry-copy' },
+			cancellation: { isCancellationRequested: false },
+		});
+		assert.ok(result.status === 'success' || result.status === 'partial');
+		if (result.status !== 'success' && result.status !== 'partial') { return; }
+
+		const mermaid = result.mermaidText;
+		assert.strictEqual(mermaid.split('\n').filter(line => line === 'caller->>root: invoke').length, 1);
+		assert.ok(mermaid.indexOf('caller->>root: invoke') < mermaid.indexOf('activate root'));
+		assert.strictEqual(mermaid.includes('process_orders as process_orders'), false);
+		assert.strictEqual(mermaid.includes('OrdersService as OrdersService'), false);
+		const entryLine = mermaid.split('\n').indexOf('caller->>root: invoke') + 1;
+		assert.ok(entryLine > 0);
+		assert.strictEqual(result.sourceMap.some(entry => entry.elementId === `line:${entryLine}`), false);
+
+		const model = createVisualizationViewModel(result);
+		assert.strictEqual(model.mermaidText, mermaid);
+		assert.strictEqual(model.fallbackText, mermaid);
+		const fallbackModel = createVisualizationViewModel(result, { forceFallback: true });
+		assert.strictEqual(fallbackModel.mermaidText, mermaid);
+		assert.strictEqual(fallbackModel.fallbackText, mermaid);
+
+		const factory = new PythonStubPanelFactory();
+		const clipboard = new PythonStubClipboard();
+		const adapter = new WebviewVisualizationAdapter(factory, clipboard, new PythonStubNotification());
+		const selected: string[] = [];
+		adapter.onDidReceiveAllowedMessage(message => {
+			if (message.type === 'sourceMapSelected' && message.elementId) { selected.push(message.elementId); }
+		});
+		await adapter.show(model);
+		const html = factory.panel.webview.html;
+		const payloadMatch = html.match(/const GLITCHLENS_VIEW_MODEL=(\{.*?\});const vscode=/);
+		assert.ok(payloadMatch);
+		const payload = JSON.parse(payloadMatch?.[1] ?? '{}') as { mermaidText?: string; fallbackText?: string };
+		assert.strictEqual(payload.mermaidText, mermaid);
+		assert.strictEqual(payload.fallbackText, mermaid);
+		assert.ok(html.includes('caller-&gt;&gt;root: invoke'));
+		assert.ok(html.includes('root--&gt;&gt;caller: return result'));
+		assert.ok(html.includes('<details class="diagram-fallback">'));
+		assert.ok(html.includes('caller-&gt;&gt;root: invoke'));
+		factory.panel.emitMessage({ type: 'sourceMapSelected', elementId: `line:${entryLine}` });
+		assert.deepStrictEqual(selected, []);
+		await adapter.copyCurrentMermaidForTest();
+		assert.deepStrictEqual(clipboard.writes, [mermaid]);
+
+		await adapter.show(fallbackModel);
+		assert.ok(factory.panel.webview.html.includes('caller-&gt;&gt;root: invoke'));
+		await adapter.copyCurrentMermaidForTest();
+		assert.deepStrictEqual(clipboard.writes, [mermaid, mermaid]);
+	});
 });
 
 class PythonStubPanelFactory implements WebviewPanelFactory {
@@ -405,6 +471,10 @@ class PythonStubPanel implements WebviewPanelPort {
 	public onDidReceiveMessage(listener: (message: unknown) => void) {
 		this.messageHandler = listener;
 		return { dispose: () => { this.messageHandler = undefined; } };
+	}
+
+	public emitMessage(message: unknown): void {
+		this.messageHandler?.(message);
 	}
 }
 
