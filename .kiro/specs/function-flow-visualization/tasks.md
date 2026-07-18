@@ -687,3 +687,40 @@
 - Task 26.1 完了後: caller が Renderer 固定 participant に留まり、Flow Model、FlowParticipant、Language Analyzer、throw の既存契約を変更していないことを確認する。
 - Task 26.2 完了後: callee の activation 終了と `root-->>caller` の return が分離され、caller 名の推測、return の重複、SourceMap 行ずれがないことを確認する。
 - Task 26.3 完了後: WebView、fallback、Clipboard が caller を含む同一の正規 Mermaid text を利用し、全品質ゲートが成功することを確認する。
+
+## caller から self への開始呼び出しの追加タスク
+
+- [ ] 27. caller から self への開始呼び出しを共通 Mermaid 契約へ追加する
+
+- [x] 27.1 固定 caller から self への synthetic entry を Renderer に実装する
+  - participant 宣言の後かつ関数本体の処理より前に、固定 `caller` から `self` への開始呼び出しを一度だけ出力する。
+  - caller の実在する関数名、class 名、module 名、file 名を推測せず、Flow Model、FlowParticipant、Language Analyzer、または SourceMap に synthetic entry のデータを追加しない。
+  - `self` の activation を entry の後に開始し、既存の Call、Await、Return、Throw、partial result、diagnostic の順序と契約を維持する。
+  - Observable completion: 通常 Call、await、または return の有無にかかわらず、Mermaid text が本体前に一つの `caller->>root: invoke` を含み、entry がコードジャンプの対象にならない。
+  - _Depends: 26.1_
+  - _Boundary: MermaidRenderer / RenderContext_
+  - _Requirements: 16.1, 16.8, 17.5_
+
+- [ ] 27.2 synthetic entry の Renderer 回帰を追加する
+  - 通常 Call、await、nested Call、Unknown / Unresolved、partial result、return、throw の fixture で、entry が participant 宣言後・関数本体前に一度だけ出力されることを検証する。
+  - entry が FlowNode / FlowEdge の SourceMap を生成せず、return の SourceMap、callee activation の終了、既存の diagnostic と処理順が維持されることを検証する。
+  - caller 名が対象関数名、class 名、module 名、file 名から推測されず、entry の追加で return の送信元・送信先が変わらないことを検証する。
+  - Observable completion: Renderer test が entry の一意性・順序・SourceMap 非対象・activation・既存 return 契約を期待値として成功する。
+  - _Depends: 27.1_
+  - _Boundary: MermaidRenderer tests / MessageLabelFormatter tests_
+  - _Requirements: 16.7, 16.8, 17.1, 17.2, 17.3, 17.5, 17.6_
+
+- [ ] 27.3 caller entry を含む表示・コピー契約を統合検証する
+  - Renderer が出力した entry を含む正規 Mermaid text を、WebView の描画入力、詳細表示、fallback、Clipboard が構造変換なしで共有することを検証する。
+  - synthetic entry をクリックまたは選択してもコードジャンプ対象を生成せず、return と既存の SourceMap 対応、unknown / unresolved、partial result、SVG 装飾が回帰しないことを確認する。
+  - `npm run check-types`、`npm run lint`、`npm run test:unit`、`npm run compile`、`npm run test:integration` を実行する。
+  - Observable completion: entry を含む表示 Mermaid と Clipboard 内容が byte-for-byte で一致し、synthetic entry に架空のコード対応がないことを共通品質ゲートで確認できる。
+  - _Depends: 27.2_
+  - _Boundary: VisualizationView / ClipboardAdapter / Integration validation_
+  - _Requirements: 4.2, 5.2, 16.6, 16.8, 17.7_
+
+## caller entry 契約のレビューゲート
+
+- Task 27.1 完了後: caller が Renderer 固定 participant に留まり、entry のために Flow Model、Analyzer、caller 名推測、SourceMap の公開契約を拡張していないことを確認する。
+- Task 27.2 完了後: `caller->>root: invoke` が一度だけ関数本体より前に現れ、activation、return、throw、unknown / unresolved、partial result の既存契約を変更していないことを確認する。
+- Task 27.3 完了後: WebView、fallback、Clipboard が entry を含む同一の正規 Mermaid text を利用し、synthetic entry がコードジャンプ対象にならないことと全品質ゲートの成功を確認する。

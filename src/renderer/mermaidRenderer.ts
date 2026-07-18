@@ -68,6 +68,7 @@ class RenderContext {
 		this.addParticipant('root', 'self');
 		this.prepareParticipants();
 		this.renderParticipants();
+		this.renderCallerEntry();
 		this.activateParticipant('root');
 		this.renderEntryCall();
 		this.renderEdges();
@@ -96,6 +97,10 @@ class RenderContext {
 		for (const participant of this.participants.values()) {
 			this.addLine(`participant ${participant.id} as ${escapeText(participant.label)}`);
 		}
+	}
+
+	private renderCallerEntry(): void {
+		this.addLine('caller->>root: invoke');
 	}
 
 	private renderEdges(): void {

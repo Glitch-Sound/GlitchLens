@@ -29,6 +29,20 @@ suite('MermaidRenderer', () => {
 		assert.deepStrictEqual(result.warnings, []);
 	});
 
+	test('renders a single synthetic caller invocation before the function body', () => {
+		const result = new MermaidRenderer().render(createModel());
+		const lines = result.mermaidText.trimEnd().split('\n');
+
+		assert.strictEqual(lines.filter(line => line === 'caller->>root: invoke').length, 1);
+		const entryLine = lines.indexOf('caller->>root: invoke');
+		const rootActivationLine = lines.indexOf('activate root');
+		const firstBodyLine = lines.findIndex(line => line.startsWith('root->>'));
+		assert.ok(entryLine > lines.indexOf('participant root as self'));
+		assert.ok(entryLine < rootActivationLine);
+		assert.ok(rootActivationLine < firstBodyLine);
+		assert.strictEqual(result.sourceMap.some(entry => entry.elementId === `line:${entryLine + 1}`), false);
+	});
+
 	test('emits canonical participant activations for calls and terminal returns', () => {
 		const result = new MermaidRenderer().render(createModel());
 		const lines = result.mermaidText.trimEnd().split('\n');
