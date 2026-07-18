@@ -736,7 +736,7 @@
   - _Boundary: Common Flow Model_
   - _Requirements: 16.2, 16.4, 16.5, 18.1, 18.5_
 
-- [ ] 28.2 (P) TypeScript / JavaScript の明示的な自己 receiver を分類する
+- [x] 28.2 (P) TypeScript / JavaScript の明示的な自己 receiver を分類する
   - `this.method()` と await を伴う同形式の呼び出しを自己呼び出しとして共通 Flow Model へ出力する。
   - 修飾なし direct call、chain call、computed call、動的 receiver は自己呼び出しと推測せず、既存の fallback 規則を維持する。
   - Observable completion: TypeScript / JavaScript fixture が自己 receiver だけを自己呼び出し target とし、direct / dynamic call を自己呼び出しにしない。

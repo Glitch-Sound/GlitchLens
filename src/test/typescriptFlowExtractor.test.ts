@@ -31,6 +31,25 @@ suite('TypeScriptAnalyzer static flow extraction', () => {
 		assert.strictEqual(computed?.participant?.key, 'unknown');
 	});
 
+	test('classifies explicit this calls as self invocations without changing direct or dynamic fallbacks', async () => {
+		const result = await analyze(`class Service { async target() { this.validate(); await this.save(); validateOrder(); factory().run(); } }`, 'typescript', 45);
+		assert.ok(result.status === 'success' || result.status === 'partial');
+		if (result.status !== 'success' && result.status !== 'partial') { return; }
+		const calls = result.model.nodes.filter(node => node.kind === 'call');
+		const validate = calls.find(node => node.calleeName === 'validate');
+		const save = calls.find(node => node.calleeName === 'save');
+		const direct = calls.find(node => node.calleeName === 'validateOrder');
+		const dynamic = calls.find(node => node.calleeName === 'run');
+		assert.strictEqual(validate?.invocationTarget, 'self');
+		assert.strictEqual(save?.invocationTarget, 'self');
+		assert.strictEqual(validate?.participant, undefined);
+		assert.strictEqual(save?.participant, undefined);
+		assert.strictEqual(direct?.invocationTarget, undefined);
+		assert.strictEqual(direct?.participant?.key, 'unknown');
+		assert.strictEqual(dynamic?.invocationTarget, undefined);
+		assert.strictEqual(dynamic?.resolution, 'unresolved');
+	});
+
 	test('extracts await calls, branches, loops, returns, throws, and try/catch/finally', async () => {
 		const result = await analyze(`async function target(value) {\n await load(value);\n if (value) { work(); } else { other(); }\n switch (value) { case 1: one(); break; default: two(); }\n for (const item of value) { visit(item); }\n for (;;) { tick(); break; }\n while (value) { wait(); }\n do { retry(); } while (value);\n try { risky(); return value; } catch (error) { recover(error); throw error; } finally { cleanup(); }\n}`, 'typescript', 30);
 	assert.strictEqual(result.status, 'success');

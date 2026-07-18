@@ -302,7 +302,7 @@ class FlowBuilder {
 				const callInfo = this.callInfo(node);
 				for (const child of childNodes(node)) {await visit(child);}
 				if (ownerId) {this.skipNextEdge = true;}
-				const call = this.addNode({ kind: 'call', calleeName: callInfo.calleeName, participant: callInfo.participant, resolution: callInfo.resolution, label: callInfo.calleeName, node });
+				const call = this.addNode({ kind: 'call', calleeName: callInfo.calleeName, participant: callInfo.participant, invocationTarget: callInfo.invocationTarget, resolution: callInfo.resolution, label: callInfo.calleeName, node });
 				if (callInfo.resolution !== 'resolved') {
 					this.addDiagnostic(callInfo.resolution === 'unknown' ? 'unknown-call' : 'unresolved-call', 'warning', callInfo.message, node, call.id);
 				}
@@ -314,12 +314,12 @@ class FlowBuilder {
 		await visit(root);
 	}
 
-	private addNode(data: { kind: FlowNode['kind']; node: ts.Node; condition?: string; expression?: string; catchBinding?: string; hasFinally?: boolean; calleeName?: string; participant?: FlowParticipant; resolution?: 'resolved' | 'unknown' | 'unresolved'; label?: string }): FlowNode {
+	private addNode(data: { kind: FlowNode['kind']; node: ts.Node; condition?: string; expression?: string; catchBinding?: string; hasFinally?: boolean; calleeName?: string; participant?: FlowParticipant; invocationTarget?: 'participant' | 'self'; resolution?: 'resolved' | 'unknown' | 'unresolved'; label?: string }): FlowNode {
 		const id = `node:${this.nextNode++}`;
 		const base = { id, kind: data.kind, order: this.nodes.length, sourceLocation: this.location(data.node.getStart(this.sourceFile), data.node.end) } as const;
 		let node: FlowNode;
 		switch (data.kind) {
-			case 'call': node = { ...base, kind: 'call', calleeName: data.calleeName ?? '<call>', participant: data.participant, resolution: data.resolution ?? 'resolved', label: data.label }; break;
+			case 'call': node = { ...base, kind: 'call', calleeName: data.calleeName ?? '<call>', participant: data.participant, invocationTarget: data.invocationTarget, resolution: data.resolution ?? 'resolved', label: data.label }; break;
 			case 'branch': node = { ...base, kind: 'branch', condition: data.condition }; break;
 			case 'loop': node = { ...base, kind: 'loop', condition: data.condition }; break;
 			case 'await': node = { ...base, kind: 'await', expression: data.expression }; break;
@@ -428,6 +428,9 @@ class FlowBuilder {
 			return { calleeName: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Computed callable target could not be named statically.' };
 		}
 		if (ts.isPropertyAccessExpression(expression)) {
+			if (expression.expression.kind === ts.SyntaxKind.ThisKeyword) {
+				return { calleeName: expression.name.text, participant: undefined, invocationTarget: 'self', resolution: 'resolved', message: '' };
+			}
 			if (this.isDynamicReceiver(expression.expression) && !collectionMethodNames.has(expression.name.text)) {
 				return { calleeName: expression.name.text, participant: fallbackParticipant('unresolved'), resolution: 'unresolved', message: `Call "${expression.name.text}" has a dynamic receiver and was kept unresolved.` };
 			}
@@ -490,7 +493,8 @@ interface LoopContext {
 
 interface CallInfo {
 	readonly calleeName: string;
-	readonly participant: FlowParticipant;
+	readonly participant?: FlowParticipant;
+	readonly invocationTarget?: 'participant' | 'self';
 	readonly resolution: 'resolved' | 'unknown' | 'unresolved';
 	readonly message: string;
 }
