@@ -766,3 +766,48 @@
 - Task 28.1 完了後: 自己呼び出しを Call の明示的な意味情報で表し、participant の label または実行時情報から推測していないことを確認する。
 - Task 28.3 完了後: Note の SourceMap、root activation の対称性、await の一意な表示、追加 participant / self arrow の不在を確認する。
 - Task 28.4 完了後: caller、return、throw、Unknown / Unresolved、partial result と共存する正規 Mermaid text が表示、fallback、Clipboard で一致し、全品質ゲートが成功することを確認する。
+
+## Unknown ライフラインの self フォールバック追加タスク
+
+- [ ] 29. Unknown ライフラインを解析エラー時だけに限定し、抽出可能な Call を self へフォールバックする
+
+- [x] 29.1 self フォールバックの共通 Call 契約を確定する
+  - 表示宛先が `self` の Call を、明示的な自己 receiver と、抽出可能だが明示的な外部主体を構築できない Call の双方に適用する。
+  - `Unknown` は source range と処理順を保持できる recoverable な解析エラーだけに限定し、全体解析失敗には架空の Mermaid Call を作らない。
+  - 既存の named participant、外部主体の `Unresolved`、公開 Flow Model の後方互換を維持する。
+  - Observable completion: contract fixture が fallback self、明示 external、recoverable Unknown、全体 failure の4分類を区別して検証できる。
+  - _Boundary: Common Flow Model contract_
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 16.2, 16.5, 16.6, 18.1, 18.5_
+
+- [ ] 29.2 TypeScript / JavaScript の Call 主体を self フォールバックへ分類する
+  - `this`、修飾なし direct、computed、chain、および明示 external receiver を構築できない optional Call を self target として出力する。
+  - 単一識別子の外部 receiver を持つ optional property Call は外部 participant のままにし、receiver 不明だけでは Unknown を生成しない。
+  - recoverable な解析エラーだけを Unknown と diagnostic で表し、分類意味論の変更に合わせて解析キャッシュを無効化する。
+  - Observable completion: TypeScript / JavaScript fixture が self fallback、named external、external Unresolved、recoverable Unknown を期待する Flow Model として返す。
+  - _Depends: 29.1_
+  - _Boundary: TypeScriptAnalyzer_
+  - _Requirements: 2.3, 6.1, 6.2, 6.3, 6.5, 15.1, 16.2, 16.5, 18.1, 18.2, 18.3, 18.4, 18.5_
+
+- [ ] 29.3 self・Unknown・Unresolved の共通 Mermaid 契約を回帰検証する
+  - self fallback をネスト活性と操作名 Note、recoverable error を Unknown participant、明示 external の操作未解決を Unresolved participant として描画する。
+  - await、nested Call、return、throw、partial result において、Note、活性化、SourceMap、呼び出し順が維持されることを検証する。
+  - Observable completion: Renderer regression が self fallback に `Unknown` participant や自己宛て arrow を出力せず、error path だけが Unknown と diagnostic を出力することを確認できる。
+  - _Depends: 29.1, 29.2_
+  - _Boundary: MermaidRenderer, Flow Model contract tests_
+  - _Requirements: 4.1, 4.3, 4.5, 6.1, 6.2, 6.3, 6.4, 16.3, 16.5, 16.6, 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7_
+
+- [ ] 29.4 self フォールバックの表示・コピー統合を検証する
+  - Renderer が生成した self fallback、Unknown exception、Unresolved external を含む正規 Mermaid text を、WebView、fallback、Clipboard が変換せず共有する。
+  - コードジャンプと SourceMap が self Note と recoverable error の位置を保持し、synthetic entry と return の既存契約を変更しないことを確認する。
+  - Observable completion: 表示 Mermaid、fallback、Clipboard の内容が byte-for-byte で一致し、self fallback 図で操作元コードへ移動できる。
+  - _Depends: 29.3_
+  - _Boundary: VisualizationView, ClipboardAdapter, Integration validation_
+  - _Requirements: 4.2, 5.1, 5.2, 5.3, 6.4, 16.6, 18.6, 18.7_
+
+- [ ] 29.5 TypeScript / JavaScript の self フォールバック品質ゲートを完了する
+  - TypeScript、JavaScript、TSX、JSX の direct、computed、chain、optional external、recoverable parse error を含む分類 fixture を実行する。
+  - 型検査、lint、unit test、compile、integration test を実行し、既存の CodeLens、cache、caller / return、未解決通知が回帰しないことを確認する。
+  - Observable completion: 全品質ゲートが成功し、対応言語すべてで Unknown が解析エラー時だけに現れることを回帰結果で確認できる。
+  - _Depends: 29.4_
+  - _Boundary: TypeScript / JavaScript regression validation_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 3.1, 3.2, 3.3, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 8.1, 8.2, 8.3, 8.4, 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 16.7, 16.8, 16.9, 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8, 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7_

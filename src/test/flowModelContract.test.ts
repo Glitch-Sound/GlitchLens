@@ -5,6 +5,7 @@ import * as path from 'path';
 import {
 	fallbackParticipant,
 	flowEdgeKinds,
+	flowInvocationTargets,
 	flowParticipantKinds,
 	flowNodeKinds,
 	isFlowEdgeKind,
@@ -20,6 +21,41 @@ suite('Common Flow Model contract', () => {
 		if (selfCall.kind !== 'call') { return; }
 		assert.strictEqual(selfCall.invocationTarget, 'self');
 		assert.strictEqual(selfCall.participant, undefined);
+	});
+
+	test('distinguishes self fallback, explicit external, recoverable Unknown, and failed analysis contracts', () => {
+		const models = createCallClassificationModels();
+		const selfFallback = models.selfFallback.nodes[0];
+		const explicitExternal = models.explicitExternal.nodes[0];
+		const unresolvedExternal = models.unresolvedExternal.nodes[0];
+		const recoverableUnknown = models.recoverableUnknown.nodes[0];
+
+		assert.deepStrictEqual(flowInvocationTargets, ['participant', 'self']);
+		assert.strictEqual(selfFallback.kind, 'call');
+		assert.strictEqual(selfFallback.invocationTarget, 'self');
+		assert.strictEqual(selfFallback.resolution, 'resolved');
+		assert.strictEqual(selfFallback.participant, undefined);
+		assert.strictEqual(explicitExternal.kind, 'call');
+		assert.strictEqual(explicitExternal.invocationTarget, 'participant');
+		assert.strictEqual(explicitExternal.resolution, 'resolved');
+		assert.deepStrictEqual(explicitExternal.participant, namedParticipant('instance', 'gateway'));
+		assert.strictEqual(unresolvedExternal.kind, 'call');
+		assert.strictEqual(unresolvedExternal.invocationTarget, 'participant');
+		assert.strictEqual(unresolvedExternal.resolution, 'unresolved');
+		assert.deepStrictEqual(unresolvedExternal.participant, fallbackParticipant('unresolved'));
+		assert.deepStrictEqual(models.unresolvedExternal.diagnostics.map(diagnostic => diagnostic.kind), ['unresolved-call']);
+		assert.strictEqual(recoverableUnknown.kind, 'call');
+		assert.deepStrictEqual(recoverableUnknown.participant, fallbackParticipant('unknown'));
+		assert.strictEqual(recoverableUnknown.order, 3);
+		assert.deepStrictEqual(recoverableUnknown.sourceLocation.range, {
+			start: { line: 4, character: 2 },
+			end: { line: 4, character: 18 },
+		});
+		assert.strictEqual(models.recoverableUnknown.completeness, 'partial');
+		assert.deepStrictEqual(models.recoverableUnknown.diagnostics.map(diagnostic => diagnostic.kind), ['unknown-call', 'partial-analysis']);
+		assert.strictEqual(models.failed.completeness, 'failed');
+		assert.deepStrictEqual(models.failed.nodes, []);
+		assert.deepStrictEqual(models.failed.diagnostics.map(diagnostic => diagnostic.kind), ['analysis-failed']);
 	});
 
 	test('defines stable FlowParticipant keys and excludes the root function from call participants', () => {
@@ -307,6 +343,79 @@ function createContractModel(): FlowModel {
 		source: { uri: 'file:///workspace/self.ts', languageId: 'typescript', documentVersion: 1 },
 		completeness: 'complete',
 	};
+}
+
+function createCallClassificationModels(): {
+	readonly selfFallback: FlowModel;
+	readonly explicitExternal: FlowModel;
+	readonly unresolvedExternal: FlowModel;
+	readonly recoverableUnknown: FlowModel;
+	readonly failed: FlowModel;
+} {
+	const base = createContractModel();
+	const selfFallback: FlowModel = {
+		...base,
+		nodes: [{
+			id: 'node:self-fallback', kind: 'call', order: 1, sourceLocation: sourceLocation(2, 2, 2, 20, 'lookup'),
+			calleeName: 'lookup', resolution: 'resolved', invocationTarget: 'self',
+		}],
+	};
+	const explicitExternal: FlowModel = {
+		...base,
+		nodes: [{
+			id: 'node:external', kind: 'call', order: 2, sourceLocation: sourceLocation(3, 2, 3, 22, 'fetch'),
+			calleeName: 'fetch', resolution: 'resolved', invocationTarget: 'participant',
+			participant: namedParticipant('instance', 'gateway'),
+		}],
+	};
+	const unresolvedExternal: FlowModel = {
+		...base,
+		metadata: { ...base.metadata, completeness: 'partial' },
+		nodes: [{
+			id: 'node:unresolved-external', kind: 'call', order: 3, sourceLocation: sourceLocation(4, 2, 4, 22, 'execute'),
+			calleeName: 'execute', resolution: 'unresolved', invocationTarget: 'participant',
+			participant: fallbackParticipant('unresolved'),
+		}],
+		diagnostics: [{
+			id: 'diagnostic:unresolved-call', kind: 'unresolved-call', severity: 'warning',
+			message: 'The external operation could not be resolved statically.',
+			nodeId: 'node:unresolved-external', sourceLocation: sourceLocation(4, 2, 4, 22, 'execute'),
+		}],
+		completeness: 'partial',
+	};
+	const recoverableUnknown: FlowModel = {
+		...base,
+		metadata: { ...base.metadata, completeness: 'partial' },
+		nodes: [{
+			id: 'node:recoverable-unknown', kind: 'call', order: 3, sourceLocation: sourceLocation(4, 2, 4, 18, 'broken'),
+			calleeName: 'broken', resolution: 'unknown', invocationTarget: 'participant',
+			participant: fallbackParticipant('unknown'),
+		}],
+		diagnostics: [
+			{
+				id: 'diagnostic:unknown-call', kind: 'unknown-call', severity: 'warning',
+				message: 'A recoverable analysis error prevented call-target classification.',
+				nodeId: 'node:recoverable-unknown', sourceLocation: sourceLocation(4, 2, 4, 18, 'broken'),
+			},
+			{
+				id: 'diagnostic:partial-analysis', kind: 'partial-analysis', severity: 'warning',
+				message: 'Analysis completed with recoverable errors.',
+			},
+		],
+		completeness: 'partial',
+	};
+	const failed: FlowModel = {
+		...base,
+		metadata: { ...base.metadata, completeness: 'failed' },
+		nodes: [],
+		diagnostics: [{
+			id: 'diagnostic:failed', kind: 'analysis-failed', severity: 'error',
+			message: 'Analysis failed before a flow model could be constructed.',
+		}],
+		completeness: 'failed',
+	};
+
+	return { selfFallback, explicitExternal, unresolvedExternal, recoverableUnknown, failed };
 }
 
 function sourceLocation(

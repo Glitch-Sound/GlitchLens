@@ -11,6 +11,7 @@ export const flowDiagnosticKinds = [
 	'unresolved-call',
 	'unsupported-syntax',
 	'partial-analysis',
+	'analysis-failed',
 	'order-uncertain',
 ] as const;
 

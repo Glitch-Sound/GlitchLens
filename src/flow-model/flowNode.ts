@@ -24,6 +24,12 @@ export type CallResolution = typeof callResolutions[number];
 
 export const flowInvocationTargets = ['participant', 'self'] as const;
 
+/**
+ * `self` covers both an explicit self receiver and a call whose target is
+ * extractable but cannot be identified as an explicit external participant.
+ * `participant` is reserved for named external participants and recoverable
+ * analysis-error fallbacks such as `Unknown`.
+ */
 export type FlowInvocationTarget = typeof flowInvocationTargets[number];
 
 export interface BaseFlowNode {
@@ -39,6 +45,7 @@ export interface FlowCallNode extends BaseFlowNode {
 	readonly calleeName: string;
 	readonly participant?: FlowParticipant;
 	readonly resolution: CallResolution;
+	/** See FlowInvocationTarget: self fallback never creates a participant. */
 	readonly invocationTarget?: FlowInvocationTarget;
 	readonly targetFunctionIdentifier?: string;
 }
