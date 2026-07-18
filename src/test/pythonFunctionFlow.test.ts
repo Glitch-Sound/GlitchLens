@@ -77,6 +77,28 @@ suite('Python function flow', () => {
 		assert.ok(result.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call' || diagnostic.kind === 'unknown-call'));
 	});
 
+	test('classifies explicit self calls without changing direct or dynamic fallbacks', async () => {
+		const text = [
+			'async def target(self, service):',
+			'    self.validate_order() ',
+			'    await self.save() ',
+			'    validate_order() ',
+			'    obj.child.run() ',
+		].join('\n');
+		const result = await new PythonAnalyzer().analyze(input(text, text.indexOf('target')));
+		assert.ok(result.status === 'success' || result.status === 'partial');
+		if (result.status !== 'success' && result.status !== 'partial') { return; }
+		const calls = result.model.nodes.filter(node => node.kind === 'call');
+		assert.deepStrictEqual(calls.map(node => node.calleeName), ['validate_order', 'save', 'validate_order', 'run']);
+		const selfCalls = calls.filter(node => node.invocationTarget === 'self');
+		assert.deepStrictEqual(selfCalls.map(node => node.calleeName), ['validate_order', 'save']);
+		assert.ok(selfCalls.every(node => node.participant === undefined));
+		const direct = calls.find(node => node.calleeName === 'validate_order' && node.invocationTarget !== 'self');
+		assert.deepStrictEqual(direct?.participant, { key: 'unknown', label: 'Unknown', kind: 'unknown' });
+		const dynamic = calls.find(node => node.calleeName === 'run');
+		assert.deepStrictEqual(dynamic?.participant, { key: 'unresolved', label: 'Unresolved', kind: 'unresolved' });
+	});
+
 	test('handles assignments, except bindings, loop exits, and concise control labels', async () => {
 		const text = [
 			'async def hoge(orders: list[Order]) -> list[str]:',
@@ -97,7 +119,7 @@ suite('Python function flow', () => {
 
 		assert.strictEqual(result.status, 'success');
 		if (result.status !== 'success') { return; }
-		assert.strictEqual(result.model.metadata.analyzerVersion, '1.0.2');
+		assert.strictEqual(result.model.metadata.analyzerVersion, '1.0.3');
 		assert.strictEqual(result.diagnostics.some(diagnostic => diagnostic.message.includes('AssignStatement')), false);
 		const control = result.model.nodes.find(node => node.kind === 'try-catch');
 		const loop = result.model.nodes.find(node => node.kind === 'loop');

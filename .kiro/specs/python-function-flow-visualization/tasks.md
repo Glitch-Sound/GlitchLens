@@ -243,3 +243,37 @@
 
 - Task 15.1 完了後: PythonAnalyzer が caller の名前解決、synthetic Flow Model、Python 専用 entry 表示を担わず、共通 Renderer の `caller->>root: invoke` 契約だけを利用することを確認する。
 - Task 15.2 完了後: Python の WebView、fallback、Clipboard、SourceMap、activation が entry を含む共通 Mermaid text を利用し、synthetic entry がコードジャンプ対象にならないことと全品質ゲートの成功を確認する。
+
+## Python の明示的な自己呼び出しの追加タスク
+
+- [ ] 16. Python の明示的な自己呼び出しを共通表示契約へ追従させる
+
+- [x] 16.1 Python の `self.method()` を自己呼び出しとして変換する
+  - `self.method()` と await を伴う同形式の呼び出しだけを共通の自己呼び出し target として出力する。
+  - 修飾なし direct call、chain receiver、computed receiver、動的属性アクセスを自己呼び出しと推測せず、既存の Unknown / Unresolved と該当する diagnostic 規則を維持する。
+  - Observable completion: Python Analyzer fixture が `self.method()` の自己呼び出し target、await の実行順、direct / dynamic receiver の非誤分類を返す。
+  - _Depends: function-flow-visualization:28.1_
+  - _Boundary: PythonAnalyzer_
+  - _Requirements: 2.2, 2.3, 3.1, 4.1, 4.2, 6.1, 6.4, 7.1, 7.2, 7.3, 7.4_
+
+- [ ] 16.2 Python Flow Model と共通 MermaidRenderer の自己呼び出し回帰を追加する
+  - `self.method()`、await、nested self call、通常 receiver、direct / dynamic call、return、raise、partial result を共通 Renderer へ渡し、実行順と未解決規則を検証する。
+  - root のネスト activation と Note、追加 participant / self arrow の不在、SourceMap、caller entry、root return を共通出力として検証する。
+  - Observable completion: Python fixture が自己呼び出し Note と対称な activation を出力し、通常 / 未解決呼び出しと terminal 表示の既存期待値を維持する。
+  - _Depends: function-flow-visualization:28.3, 16.1_
+  - _Boundary: Python flow regression, MermaidRenderer tests_
+  - _Requirements: 2.13, 2.14, 3.3, 4.1, 4.2, 6.1, 6.4, 6.5, 6.6, 6.7, 7.2, 7.3, 7.4, 7.6_
+
+- [ ] 16.3 Python の自己呼び出し表示・コピー統合を検証する
+  - Python の自己呼び出し Note を含む正規 Mermaid text が、WebView 描画入力、詳細表示、fallback、Clipboard で byte-for-byte 一致することを検証する。
+  - Python 専用の Renderer / WebView / Clipboard 分岐を追加せず、`npm run check-types`、`npm run lint`、`npm run test:unit`、`npm run compile`、`npm run test:integration`、`npm run package` を実行する。
+  - Observable completion: Python の自己呼び出しを含む表示・コピー・fallback が共通 Mermaid text を共有し、全品質ゲートが成功する。
+  - _Depends: function-flow-visualization:28.4, 16.2_
+  - _Boundary: Python flow integration, VisualizationView, ClipboardAdapter_
+  - _Requirements: 3.6, 5.7, 7.5, 7.6_
+
+## Python 自己呼び出しのレビューゲート
+
+- Task 16.1 完了後: `self` だけを明示的な自己 receiver として分類し、direct / dynamic call の既存 fallback を自己呼び出しへ誤分類していないことを確認する。
+- Task 16.2 完了後: Python Flow Model が共通 Renderer の root activation と Note を利用し、Python 専用 participant / self arrow / Renderer 分岐を要求していないことを確認する。
+- Task 16.3 完了後: Python の WebView、fallback、Clipboard が自己呼び出し Note を含む同一 Mermaid text を利用し、全品質ゲートが成功することを確認する。

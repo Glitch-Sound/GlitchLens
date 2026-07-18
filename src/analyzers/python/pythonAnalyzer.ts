@@ -1,7 +1,7 @@
 import type { SyntaxNode } from '@lezer/common';
 
 import type { AnalyzerInput, AnalyzerResult, LanguageAnalyzer } from '../languageAnalyzer';
-import type { FlowDiagnostic, FlowEdge, FlowModel, FlowNode, FlowFunction, SourceLocation } from '../../flow-model';
+import type { FlowDiagnostic, FlowEdge, FlowInvocationTarget, FlowModel, FlowNode, FlowFunction, SourceLocation } from '../../flow-model';
 import { fallbackParticipant, namedParticipant } from '../../flow-model';
 import type { FlowParticipant } from '../../flow-model';
 import { PythonFunctionLocator } from './pythonFunctionLocator';
@@ -9,7 +9,7 @@ import { directChildren, firstChildNamed, parsePython } from './pythonParser';
 
 export class PythonAnalyzer implements LanguageAnalyzer {
 	public readonly id = 'python';
-	public readonly version = '1.0.2';
+	public readonly version = '1.0.3';
 	public readonly languageIds = ['python'] as const;
 	private readonly locator = new PythonFunctionLocator();
 
@@ -89,7 +89,7 @@ class PythonFlowBuilder {
 		};
 		return {
 			metadata: {
-				schemaVersion: '1.0.0', analyzerId: 'python', analyzerVersion: '1.0.2', languageId: 'python',
+				schemaVersion: '1.0.0', analyzerId: 'python', analyzerVersion: '1.0.3', languageId: 'python',
 				generatedAt: new Date().toISOString(), sourceDocumentVersion: this.input.source.version,
 				completeness: this.completeness, configurationDigest: this.input.configuration.configurationDigest,
 				rootFunctionIdentifier: rootFunction.id,
@@ -236,14 +236,14 @@ class PythonFlowBuilder {
 			for (const child of children) { await this.extractCalls(child); }
 			const expression = children.find(child => child.name !== 'ArgList');
 			const info = this.callInfo(expression, root);
-			const call = this.addNode('call', root, info.name, info.resolution, undefined, undefined, info.participant);
+			const call = this.addNode('call', root, info.name, info.resolution, undefined, undefined, info.participant, info.invocationTarget);
 			if (info.resolution !== 'resolved') { this.addDiagnostic(info.resolution === 'unknown' ? 'unknown-call' : 'unresolved-call', 'warning', info.message, root, call.id); }
 			return;
 		}
 		for (const child of directChildren(root)) { await this.extractCalls(child); }
 	}
 
-	private callInfo(expression: SyntaxNode | undefined, call: SyntaxNode): { readonly name: string; readonly participant: FlowParticipant; readonly resolution: 'resolved' | 'unknown' | 'unresolved'; readonly message: string } {
+	private callInfo(expression: SyntaxNode | undefined, call: SyntaxNode): { readonly name: string; readonly participant?: FlowParticipant; readonly invocationTarget?: FlowInvocationTarget; readonly resolution: 'resolved' | 'unknown' | 'unresolved'; readonly message: string } {
 		if (!expression) { return { name: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Call target could not be named statically.' }; }
 		const text = this.text(expression);
 		if (expression.name === 'VariableName') { return { name: text, participant: fallbackParticipant('unknown'), resolution: 'resolved', message: '' }; }
@@ -256,6 +256,9 @@ class PythonFlowBuilder {
 				return { name: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Computed Python call target could not be named statically.' };
 			}
 			if (receiver?.name === 'VariableName') {
+				if (this.text(receiver) === 'self') {
+					return { name, participant: undefined, invocationTarget: 'self', resolution: 'resolved', message: '' };
+				}
 				return { name, participant: namedParticipant(/^[A-Z]/.test(this.text(receiver)) ? 'class' : 'instance', this.text(receiver)), resolution: 'resolved', message: '' };
 			}
 			return { name, participant: fallbackParticipant('unresolved'), resolution: 'unresolved', message: `Call target "${name}" has a dynamic receiver and was kept unresolved.` };
@@ -301,12 +304,12 @@ class PythonFlowBuilder {
 		return body ? this.input.source.text.slice(statement.from, body.from).replace(/:\s*$/, '').trim() : this.text(statement);
 	}
 
-	private addNode(kind: FlowNode['kind'], source: SyntaxNode, expression?: string, resolution?: 'resolved' | 'unknown' | 'unresolved', catchBinding?: string, hasFinally?: boolean, participant?: FlowParticipant): FlowNode {
+	private addNode(kind: FlowNode['kind'], source: SyntaxNode, expression?: string, resolution?: 'resolved' | 'unknown' | 'unresolved', catchBinding?: string, hasFinally?: boolean, participant?: FlowParticipant, invocationTarget?: FlowInvocationTarget): FlowNode {
 		const id = `node:${this.nextNode++}`;
 		const base = { id, kind, order: this.nodes.length, sourceLocation: this.location(source.from, source.to) } as const;
 		let node: FlowNode;
 		switch (kind) {
-			case 'call': node = { ...base, kind, calleeName: expression ?? '<unknown>', participant, resolution: resolution ?? 'resolved', label: expression }; break;
+			case 'call': node = { ...base, kind, calleeName: expression ?? '<unknown>', participant, invocationTarget, resolution: resolution ?? 'resolved', label: expression }; break;
 			case 'branch': node = { ...base, kind, condition: expression }; break;
 			case 'loop': node = { ...base, kind, condition: expression }; break;
 			case 'await': node = { ...base, kind, expression }; break;
