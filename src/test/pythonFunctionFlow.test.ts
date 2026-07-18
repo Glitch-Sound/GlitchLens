@@ -178,6 +178,9 @@ suite('Python function flow', () => {
 		assert.strictEqual(callResult.status, 'success');
 		if (callResult.status !== 'success') { return; }
 		const callRendered = new MermaidRenderer().render(callResult.model);
+		const callLines = callRendered.mermaidText.split('\n');
+		assert.strictEqual(callLines.filter(line => line === 'caller->>root: invoke').length, 1);
+		assert.ok(callLines.indexOf('caller->>root: invoke') < callLines.indexOf('activate root'));
 		assert.ok(callRendered.mermaidText.includes('participant caller as caller'));
 		assert.ok(callRendered.mermaidText.includes('participant root as self'));
 		assert.ok(callRendered.mermaidText.includes('root->>results: append'));
@@ -197,6 +200,9 @@ suite('Python function flow', () => {
 		assert.strictEqual(nestedResult.status, 'success');
 		if (nestedResult.status !== 'success') { return; }
 		const nestedRendered = new MermaidRenderer().render(nestedResult.model);
+		const nestedLines = nestedRendered.mermaidText.split('\n');
+		assert.strictEqual(nestedLines.filter(line => line === 'caller->>root: invoke').length, 1);
+		assert.ok(nestedLines.indexOf('caller->>root: invoke') < nestedLines.indexOf('activate root'));
 		assert.ok(nestedRendered.mermaidText.indexOf('root->>helper: inner') < nestedRendered.mermaidText.indexOf('root->>service: outer'));
 		assert.ok(nestedRendered.mermaidText.indexOf('activate helper') < nestedRendered.mermaidText.indexOf('deactivate helper'));
 		assert.ok(nestedRendered.mermaidText.indexOf('activate service') < nestedRendered.mermaidText.indexOf('root-->>caller: return'));
@@ -209,6 +215,7 @@ suite('Python function flow', () => {
 		assert.strictEqual(raiseResult.status, 'success');
 		if (raiseResult.status !== 'success') { return; }
 		const raiseRendered = new MermaidRenderer().render(raiseResult.model);
+		assert.strictEqual(raiseRendered.mermaidText.split('\n').filter(line => line === 'caller->>root: invoke').length, 1);
 		assert.ok(raiseRendered.mermaidText.includes('root->>results: append'));
 		assert.ok(raiseRendered.mermaidText.includes('Note over root: throw error'));
 		assert.ok(raiseRendered.mermaidText.indexOf('root->>results') < raiseRendered.mermaidText.indexOf('Note over root: throw error'));
@@ -250,6 +257,10 @@ suite('Python function flow', () => {
 		assert.strictEqual(result.mermaidText, new MermaidRenderer().render(result.model).mermaidText);
 		assert.ok(result.mermaidText.includes('participant root as self'));
 		assert.ok(result.mermaidText.includes('participant caller as caller'));
+		const entryLine = result.mermaidText.split('\n').indexOf('caller->>root: invoke') + 1;
+		assert.strictEqual(result.mermaidText.split('\n').filter(line => line === 'caller->>root: invoke').length, 1);
+		assert.ok(entryLine > 0);
+		assert.strictEqual(result.sourceMap.some(entry => entry.elementId === `line:${entryLine}`), false);
 		assert.ok(result.mermaidText.includes('participant service as service'));
 		assert.ok(result.mermaidText.includes('participant logger as logger'));
 		assert.ok(result.mermaidText.includes('participant Unknown as Unknown'));
@@ -258,6 +269,7 @@ suite('Python function flow', () => {
 		assert.ok(result.mermaidText.includes('root->>Unresolved: run (unresolved)'));
 		assert.ok(result.mermaidText.includes('await save'));
 		assert.ok(result.mermaidText.includes('return build_result(...)'));
+		assert.ok(result.mermaidText.indexOf('caller->>root: invoke') < result.mermaidText.indexOf('activate root'));
 		assert.strictEqual(result.mermaidText.includes('service-->>root: return build_result'), false);
 		assert.ok(result.mermaidText.includes('activate root'));
 		assert.ok(result.mermaidText.includes('deactivate root'));

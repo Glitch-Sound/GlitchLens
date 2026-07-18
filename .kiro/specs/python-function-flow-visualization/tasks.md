@@ -216,3 +216,30 @@
 
 - Task 14.1 完了後: PythonAnalyzer が caller の名前解決を担わず、共通 Renderer の `root-->>caller` 契約だけを利用していることを確認する。
 - Task 14.2 完了後: Python の WebView、fallback、Clipboard、SourceMap、activation が caller を含む共通 Mermaid text を利用し、全品質ゲートが成功することを確認する。
+
+## caller から self への Python 開始呼び出し回帰の追加タスク
+
+- [ ] 15. Python を共通 caller entry 契約へ追従させる
+
+- [x] 15.1 Python Flow Model の caller entry 回帰を追加する
+  - PythonAnalyzer に caller、synthetic node、entry edge、または Python 専用 participant を追加せず、既存の Common Flow Model を共通 Renderer へ渡す。
+  - `results.append(); return results`、`await service.save(); return result`、nested Call、Unknown / Unresolved、partial result の fixture で、`caller->>root: invoke` が Python 関数本体より前に一度だけ出力され、return が `root-->>caller` のままであることを検証する。
+  - Python の関数名、class 名、module 名、file 名を caller の実在名として推測せず、entry が SourceMap のコードジャンプ対象にならないこと、activation、await、throw、diagnostic を共通 Renderer 契約どおりに維持することを検証する。
+  - Observable completion: Python fixture が固定 caller、entry の一意性と順序、return 方向、callee return の不在、SourceMap 非対象、activation の期待値とともに成功する。
+  - _Depends: function-flow-visualization:27.1, function-flow-visualization:27.2, 14.1_
+  - _Boundary: Python flow regression / MermaidRenderer tests_
+  - _Requirements: 2.13, 3.3, 3.6, 6.5, 6.6, 6.8, 6.9_
+
+- [ ] 15.2 Python caller entry の表示・コピーと言語横断回帰を検証する
+  - Python の entry を含む正規 Mermaid text が、WebView 描画入力、詳細表示、fallback、Clipboard で同一となり、Python 専用 Renderer / WebView / Clipboard 分岐がないことを確認する。
+  - TypeScript / JavaScript と Python の return / await / partial fixture を比較し、entry の一意性、caller 名の非推測、SourceMap 非対象、activation と return の共通契約を検証する。
+  - `npm run check-types`、`npm run lint`、`npm run test:unit`、`npm run compile`、`npm run test:integration`、`npm run package` を実行する。
+  - Observable completion: Python と既存言語の表示・コピー・SourceMap・activation が entry を含む同一の共通 Mermaid 契約を利用し、品質ゲートで成功する。
+  - _Depends: function-flow-visualization:27.3, 15.1_
+  - _Boundary: Python flow regression / VisualizationView / ClipboardAdapter / Integration validation_
+  - _Requirements: 5.7, 6.5, 6.6, 6.9_
+
+## caller entry を含む Python 契約のレビューゲート
+
+- Task 15.1 完了後: PythonAnalyzer が caller の名前解決、synthetic Flow Model、Python 専用 entry 表示を担わず、共通 Renderer の `caller->>root: invoke` 契約だけを利用することを確認する。
+- Task 15.2 完了後: Python の WebView、fallback、Clipboard、SourceMap、activation が entry を含む共通 Mermaid text を利用し、synthetic entry がコードジャンプ対象にならないことと全品質ゲートの成功を確認する。
