@@ -788,7 +788,7 @@
   - _Boundary: TypeScriptAnalyzer_
   - _Requirements: 2.3, 6.1, 6.2, 6.3, 6.5, 15.1, 16.2, 16.5, 18.1, 18.2, 18.3, 18.4, 18.5_
 
-- [ ] 29.3 self・Unknown・Unresolved の共通 Mermaid 契約を回帰検証する
+- [x] 29.3 self・Unknown・Unresolved の共通 Mermaid 契約を回帰検証する
   - self fallback をネスト活性と操作名 Note、recoverable error を Unknown participant、明示 external の操作未解決を Unresolved participant として描画する。
   - await、nested Call、return、throw、partial result において、Note、活性化、SourceMap、呼び出し順が維持されることを検証する。
   - Observable completion: Renderer regression が self fallback に `Unknown` participant や自己宛て arrow を出力せず、error path だけが Unknown と diagnostic を出力することを確認できる。

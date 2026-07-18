@@ -426,7 +426,7 @@ suite('MermaidRenderer', () => {
 }`);
 
 		assert.deepStrictEqual(result.warnings, []);
-		assertOrder(result.mermaidText, ['loop items', 'root->>visit: visit', 'end']);
+		assertOrder(result.mermaidText, ['loop items', 'Note right of root: visit', 'end']);
 	});
 
 	test('does not warn for loop edges from analyzer generated while loop', async () => {
@@ -437,7 +437,7 @@ suite('MermaidRenderer', () => {
 }`);
 
 		assert.deepStrictEqual(result.warnings, []);
-		assertOrder(result.mermaidText, ['loop ready()', 'root->>poll: poll', 'end']);
+		assertOrder(result.mermaidText, ['loop ready()', 'Note right of root: poll', 'end']);
 	});
 
 	test('renders call and nested if inside while loop body', () => {
@@ -579,7 +579,7 @@ suite('MermaidRenderer', () => {
 }`);
 
 		assert.deepStrictEqual(result.warnings, []);
-		assertOrder(result.mermaidText, ['loop orders', 'loop order.retry < 3', 'root->>save: save', 'end', 'end']);
+		assertOrder(result.mermaidText, ['loop orders', 'loop order.retry < 3', 'Note right of root: save', 'end', 'end']);
 		assert.strictEqual(countOccurrences(result.mermaidText, ': save'), 1);
 	});
 
@@ -594,7 +594,7 @@ suite('MermaidRenderer', () => {
 
 		assert.strictEqual(countBranchWarnings(result), 0);
 		assert.deepStrictEqual(result.warnings, []);
-		assertOrder(result.mermaidText, ['alt order.status === "new"', 'root->>charge: charge', 'else', 'root->>notify: notify', 'end']);
+		assertOrder(result.mermaidText, ['alt order.status === "new"', 'Note right of root: charge', 'else', 'Note right of root: notify', 'end']);
 	});
 
 	test('does not warn for branch rendered as opt', async () => {
@@ -606,7 +606,7 @@ suite('MermaidRenderer', () => {
 
 		assert.strictEqual(countBranchWarnings(result), 0);
 		assert.deepStrictEqual(result.warnings, []);
-		assertOrder(result.mermaidText, ['opt order.ready', 'root->>ship: ship', 'end']);
+		assertOrder(result.mermaidText, ['opt order.ready', 'Note right of root: ship', 'end']);
 	});
 
 	test('does not warn for rendered nested branches', async () => {
@@ -622,7 +622,7 @@ suite('MermaidRenderer', () => {
 
 		assert.strictEqual(countBranchWarnings(result), 0);
 		assert.deepStrictEqual(result.warnings, []);
-		assertOrder(result.mermaidText, ['opt order.ready', 'alt order.status === "new"', 'root->>charge: charge', 'else', 'root->>notify: notify', 'end', 'end']);
+		assertOrder(result.mermaidText, ['opt order.ready', 'alt order.status === "new"', 'Note right of root: charge', 'else', 'Note right of root: notify', 'end', 'end']);
 	});
 
 	test('warns for connected branch that cannot be rendered as advanced syntax', () => {
@@ -738,8 +738,8 @@ suite('MermaidRenderer', () => {
 
 		assert.deepStrictEqual(result.warnings, []);
 		assertOrder(result.mermaidText, ['loop orders', 'critical try', 'opt order.amount <= 0', 'root->>push: push', 'end']);
-		assertOrder(result.mermaidText, ['alt order.status === "new"', 'root->>charge: await charge', 'else', 'root->>notify: await notify', 'end']);
-		assertOrder(result.mermaidText, ['loop order.retry < 3', 'root->>save: await save', 'alt saved', 'Note over root: break', 'else', 'Note over root: retry++', 'end', 'end', 'option catch error', 'root->>error: error', 'end', 'end']);
+		assertOrder(result.mermaidText, ['alt order.status === "new"', 'Note right of root: await charge', 'else', 'Note right of root: await notify', 'end']);
+		assertOrder(result.mermaidText, ['loop order.retry < 3', 'Note right of root: await save', 'alt saved', 'Note over root: break', 'else', 'Note over root: retry++', 'end', 'end', 'option catch error', 'Note right of root: error', 'end', 'end']);
 		assert.strictEqual(countOccurrences(result.mermaidText, 'return results'), 1);
 	});
 
