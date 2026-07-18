@@ -264,7 +264,7 @@
   - _Boundary: Python flow regression, MermaidRenderer tests_
   - _Requirements: 2.13, 2.14, 3.3, 4.1, 4.2, 6.1, 6.4, 6.5, 6.6, 6.7, 7.2, 7.3, 7.4, 7.6_
 
-- [ ] 16.3 Python の自己呼び出し表示・コピー統合を検証する
+- [x] 16.3 Python の自己呼び出し表示・コピー統合を検証する
   - Python の自己呼び出し Note を含む正規 Mermaid text が、WebView 描画入力、詳細表示、fallback、Clipboard で byte-for-byte 一致することを検証する。
   - Python 専用の Renderer / WebView / Clipboard 分岐を追加せず、`npm run check-types`、`npm run lint`、`npm run test:unit`、`npm run compile`、`npm run test:integration`、`npm run package` を実行する。
   - Observable completion: Python の自己呼び出しを含む表示・コピー・fallback が共通 Mermaid text を共有し、全品質ゲートが成功する。

@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import { JSDOM } from 'jsdom';
 
 import { PythonAnalyzer, PythonFunctionLocator, TypeScriptAnalyzer, TypeScriptFunctionLocator } from '../analyzers';
 import type { AnalyzerInput } from '../analyzers';
@@ -515,6 +516,59 @@ suite('Python function flow', () => {
 
 		await adapter.show(fallbackModel);
 		assert.ok(factory.panel.webview.html.includes('caller-&gt;&gt;root: invoke'));
+		await adapter.copyCurrentMermaidForTest();
+		assert.deepStrictEqual(clipboard.writes, [mermaid, mermaid]);
+	});
+
+	test('keeps Python self-call Mermaid byte-for-byte across Webview, fallback, and Clipboard', async () => {
+		const text = [
+			'async def target(self):',
+			'    await self.validate_order()',
+			'    return result',
+		].join('\n');
+		const source = { uri: 'file:///workspace/self_call.py', languageId: 'python', version: 1, text } as const;
+		const candidate = new PythonFunctionLocator().findFunctionContainingOffset(source, text.indexOf('target'));
+		assert.strictEqual(candidate.status, 'found');
+		if (candidate.status !== 'found') { return; }
+		const result = await new VisualizeFunctionFlowUseCase(new AnalyzerRegistry([new PythonAnalyzer()]), new MermaidRenderer()).execute({
+			source,
+			cursorOffset: text.indexOf('target'),
+			functionRange: candidate.function.range,
+			configuration: { configurationDigest: 'python-self-call-copy' },
+			cancellation: { isCancellationRequested: false },
+		});
+		assert.ok(result.status === 'success' || result.status === 'partial');
+		if (result.status !== 'success' && result.status !== 'partial') { return; }
+		const mermaid = result.mermaidText;
+		assert.strictEqual((mermaid.match(/Note right of root: await validate_order/g) ?? []).length, 1);
+		assert.strictEqual(mermaid.includes('participant validate_order as validate_order'), false);
+		assert.strictEqual(mermaid.includes('root->>validate_order'), false);
+		const model = createVisualizationViewModel(result);
+		const fallbackModel = createVisualizationViewModel(result, { forceFallback: true });
+		assert.strictEqual(model.mermaidText, mermaid);
+		assert.strictEqual(model.fallbackText, mermaid);
+		assert.strictEqual(fallbackModel.mermaidText, mermaid);
+		assert.strictEqual(fallbackModel.fallbackText, mermaid);
+
+		const factory = new PythonStubPanelFactory();
+		const clipboard = new PythonStubClipboard();
+		const adapter = new WebviewVisualizationAdapter(factory, clipboard, new PythonStubNotification());
+		await adapter.show(model);
+		const normalHtml = factory.panel.webview.html;
+		const payloadMatch = normalHtml.match(/const GLITCHLENS_VIEW_MODEL=(\{.*?\});const vscode=/);
+		assert.ok(payloadMatch);
+		const payload = JSON.parse(payloadMatch?.[1] ?? '{}') as { mermaidText?: string; fallbackText?: string };
+		assert.strictEqual(payload.mermaidText, mermaid);
+		assert.strictEqual(payload.fallbackText, mermaid);
+		assert.ok(normalHtml.includes('Note right of root: await validate_order'));
+		const normalDom = new JSDOM(normalHtml);
+		assert.strictEqual(normalDom.window.document.querySelector('.diagram-fallback pre')?.textContent, mermaid);
+		normalDom.window.close();
+		await adapter.copyCurrentMermaidForTest();
+		await adapter.show(fallbackModel);
+		const fallbackDom = new JSDOM(factory.panel.webview.html);
+		assert.strictEqual(fallbackDom.window.document.querySelector('.diagram-fallback pre')?.textContent, mermaid);
+		fallbackDom.window.close();
 		await adapter.copyCurrentMermaidForTest();
 		assert.deepStrictEqual(clipboard.writes, [mermaid, mermaid]);
 	});
