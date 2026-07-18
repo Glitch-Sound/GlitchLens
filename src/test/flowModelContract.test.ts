@@ -13,6 +13,15 @@ import {
 } from '../flow-model';
 
 suite('Common Flow Model contract', () => {
+	test('represents self invocation as an explicit call target without creating a participant', () => {
+		const model = createContractModel();
+		const selfCall = model.nodes[0];
+		assert.strictEqual(selfCall.kind, 'call');
+		if (selfCall.kind !== 'call') { return; }
+		assert.strictEqual(selfCall.invocationTarget, 'self');
+		assert.strictEqual(selfCall.participant, undefined);
+	});
+
 	test('defines stable FlowParticipant keys and excludes the root function from call participants', () => {
 		assert.deepStrictEqual(flowParticipantKinds, ['instance', 'class', 'unknown', 'unresolved']);
 		assert.deepStrictEqual(namedParticipant('instance', 'cart').key, 'instance:cart');
@@ -280,6 +289,25 @@ suite('Common Flow Model contract', () => {
 		});
 	});
 });
+
+function createContractModel(): FlowModel {
+	return {
+		metadata: {
+			schemaVersion: '1.0.0', analyzerId: 'test', analyzerVersion: '1.0.0', languageId: 'typescript',
+			generatedAt: '2026-07-18T00:00:00.000Z', sourceDocumentVersion: 1, completeness: 'complete',
+			configurationDigest: 'test', rootFunctionIdentifier: 'function:root',
+		},
+		rootFunction: { id: 'function:root', name: 'root', sourceLocation: sourceLocation(1, 0, 1, 1, 'root') },
+		nodes: [{
+			id: 'node:self', kind: 'call', order: 0, sourceLocation: sourceLocation(2, 0, 2, 20, 'self'),
+			calleeName: 'validate', resolution: 'resolved', invocationTarget: 'self',
+		}],
+		edges: [],
+		diagnostics: [],
+		source: { uri: 'file:///workspace/self.ts', languageId: 'typescript', documentVersion: 1 },
+		completeness: 'complete',
+	};
+}
 
 function sourceLocation(
 	startLine: number,

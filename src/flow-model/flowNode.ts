@@ -22,6 +22,10 @@ export const callResolutions = ['resolved', 'unknown', 'unresolved'] as const;
 
 export type CallResolution = typeof callResolutions[number];
 
+export const flowInvocationTargets = ['participant', 'self'] as const;
+
+export type FlowInvocationTarget = typeof flowInvocationTargets[number];
+
 export interface BaseFlowNode {
 	readonly id: FlowNodeId;
 	readonly kind: FlowNodeKind;
@@ -35,6 +39,7 @@ export interface FlowCallNode extends BaseFlowNode {
 	readonly calleeName: string;
 	readonly participant?: FlowParticipant;
 	readonly resolution: CallResolution;
+	readonly invocationTarget?: FlowInvocationTarget;
 	readonly targetFunctionIdentifier?: string;
 }
 

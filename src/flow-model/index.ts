@@ -7,6 +7,7 @@ export type { FlowParticipant, FlowParticipantKind } from './flowParticipant';
 export { fallbackParticipant, flowParticipantKinds, namedParticipant } from './flowParticipant';
 export type {
 	CallResolution,
+	FlowInvocationTarget,
 	FlowAwaitNode,
 	FlowBranchNode,
 	FlowCallNode,
@@ -20,6 +21,7 @@ export type {
 	FlowBreakNode,
 	FlowContinueNode,
 } from './flowNode';
+export { flowInvocationTargets } from './flowNode';
 export { callResolutions, flowNodeKinds, isFlowNodeKind } from './flowNode';
 export type { AnalysisCompleteness, FlowModelMetadata } from './metadata';
 export { analysisCompletenessValues } from './metadata';

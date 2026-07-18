@@ -724,3 +724,45 @@
 - Task 27.1 完了後: caller が Renderer 固定 participant に留まり、entry のために Flow Model、Analyzer、caller 名推測、SourceMap の公開契約を拡張していないことを確認する。
 - Task 27.2 完了後: `caller->>root: invoke` が一度だけ関数本体より前に現れ、activation、return、throw、unknown / unresolved、partial result の既存契約を変更していないことを確認する。
 - Task 27.3 完了後: WebView、fallback、Clipboard が entry を含む同一の正規 Mermaid text を利用し、synthetic entry がコードジャンプ対象にならないことと全品質ゲートの成功を確認する。
+
+## 対象関数自身への呼び出し表示の追加タスク
+
+- [ ] 28. 対象関数自身への呼び出しを共通ライフラインへ統合する
+
+- [x] 28.1 自己呼び出しの共通 Flow Model 契約を追加する
+  - 対象関数自身への呼び出しと通常の participant 呼び出しを、表示名ではなく言語非依存の Call 意味情報で区別する。
+  - 既存 Flow Model を入力とする経路は従来どおり participant 呼び出しとして扱い、Unknown / Unresolved の分類規則を変更しない。
+  - Observable completion: Flow Model contract test で、自己呼び出し target を持つ Call と未指定の既存 Call が同じ公開 contract として検証できる。
+  - _Boundary: Common Flow Model_
+  - _Requirements: 16.2, 16.4, 16.5, 18.1, 18.5_
+
+- [ ] 28.2 (P) TypeScript / JavaScript の明示的な自己 receiver を分類する
+  - `this.method()` と await を伴う同形式の呼び出しを自己呼び出しとして共通 Flow Model へ出力する。
+  - 修飾なし direct call、chain call、computed call、動的 receiver は自己呼び出しと推測せず、既存の fallback 規則を維持する。
+  - Observable completion: TypeScript / JavaScript fixture が自己 receiver だけを自己呼び出し target とし、direct / dynamic call を自己呼び出しにしない。
+  - _Depends: 28.1_
+  - _Boundary: TypeScriptAnalyzer_
+  - _Requirements: 18.1, 18.4, 18.5_
+
+- [ ] 28.3 (P) 自己呼び出しを root の活性化と Note で描画する
+  - 自己呼び出しのための participant または自己宛て message arrow を出力せず、既存 root の活性化を一段ネストして操作名の Note を出力する。
+  - await を伴う呼び出しでは `await` を一度だけ表示し、Note を Call と Await→Call edge の元コード対応として扱う。
+  - Observable completion: Renderer fixture が通常・await・nested self call で対称な root activation、Note、SourceMap を返し、追加の self / Unknown / Unresolved participant を出力しない。
+  - _Depends: 28.1_
+  - _Boundary: MermaidRenderer / RenderContext_
+  - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7_
+
+- [ ] 28.4 自己呼び出しの共通表示・コピー回帰を検証する
+  - TypeScript / JavaScript の自己呼び出し、通常 receiver、Unknown / Unresolved、return、throw、partial result で、既存の caller / self / terminal 表示と活性化が維持されることを確認する。
+  - WebView、fallback、Clipboard が自己呼び出し Note を含む同一の正規 Mermaid text を共有することを検証する。
+  - `npm run check-types`、`npm run lint`、`npm run test:unit`、`npm run compile`、`npm run test:integration` を実行する。
+  - Observable completion: 自己呼び出しを含む表示 Mermaid、SourceMap、fallback、Clipboard が期待値と byte-for-byte で一致し、共通品質ゲートが成功する。
+  - _Depends: 28.2, 28.3_
+  - _Boundary: MermaidRenderer tests, VisualizationView tests, Integration validation_
+  - _Requirements: 16.2, 16.3, 16.4, 16.5, 16.6, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7_
+
+## 自己呼び出し表示のレビューゲート
+
+- Task 28.1 完了後: 自己呼び出しを Call の明示的な意味情報で表し、participant の label または実行時情報から推測していないことを確認する。
+- Task 28.3 完了後: Note の SourceMap、root activation の対称性、await の一意な表示、追加 participant / self arrow の不在を確認する。
+- Task 28.4 完了後: caller、return、throw、Unknown / Unresolved、partial result と共存する正規 Mermaid text が表示、fallback、Clipboard で一致し、全品質ゲートが成功することを確認する。
