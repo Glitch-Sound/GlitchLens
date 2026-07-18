@@ -189,3 +189,30 @@
 
 - Task 13.1 完了後: Python Flow Model が共通 Renderer へ活性化専用の言語別データを渡さず、Call / Await / Return / Throw の順序だけで共通契約を満たすことを確認する。
 - Task 13.2 完了後: 共通 Task 25 の正規 Mermaid 出力が Python の WebView、Clipboard、fallback、SourceMap、process note に同一に伝播することを確認する。
+
+## caller を含む Python return 回帰の追加タスク
+
+- [ ] 14. Python の return を共通 caller 契約へ追従させる
+
+- [x] 14.1 Python Flow Model の caller return 回帰を追加する
+  - PythonAnalyzer に caller の推測や Python 専用 participant を追加せず、既存の Return node の式と edge 順序を共通 Renderer へ渡す。
+  - `results.append(); return results`、`await service.save(); return result`、nested Call、Unknown / Unresolved、partial result の fixture で、return が `root-->>caller` となり Python call participant から root への return を出力しないことを検証する。
+  - Python call participant の activation 終了、return の SourceMap、既存の await / throw / diagnostic を共通 Renderer 契約どおりに維持することを検証する。
+  - Observable completion: Python fixture が固定 caller、正しい return 方向、callee return の不在、activation、SourceMap の期待値とともに成功する。
+  - _Depends: function-flow-visualization:26.1, function-flow-visualization:26.2_
+  - _Boundary: Python flow regression / MermaidRenderer tests_
+  - _Requirements: 2.13, 3.3, 3.6, 6.5, 6.6, 6.8_
+
+- [ ] 14.2 Python の caller 表示・コピーと言語横断回帰を検証する
+  - Python の caller を含む正規 Mermaid text が、WebView 描画入力、詳細表示、fallback、Clipboard で同一となり、Python 専用 Renderer / WebView / Clipboard 分岐がないことを確認する。
+  - TypeScript / JavaScript と Python の return / await / partial fixture を比較し、caller 名を Python の関数名、class 名、module 名、file 名から推測しないことを確認する。
+  - `npm run check-types`、`npm run lint`、`npm run test:unit`、`npm run compile`、`npm run test:integration`、`npm run package` を実行する。
+  - Observable completion: Python と既存言語の表示・コピー・SourceMap・activation の return 契約が共通品質ゲートで成功する。
+  - _Depends: function-flow-visualization:26.3, 14.1_
+  - _Boundary: Python flow regression / VisualizationView / ClipboardAdapter / Integration validation_
+  - _Requirements: 5.7, 6.5, 6.6, 6.8_
+
+## caller を含む Python return 契約のレビューゲート
+
+- Task 14.1 完了後: PythonAnalyzer が caller の名前解決を担わず、共通 Renderer の `root-->>caller` 契約だけを利用していることを確認する。
+- Task 14.2 完了後: Python の WebView、fallback、Clipboard、SourceMap、activation が caller を含む共通 Mermaid text を利用し、全品質ゲートが成功することを確認する。

@@ -178,12 +178,15 @@ suite('Python function flow', () => {
 		assert.strictEqual(callResult.status, 'success');
 		if (callResult.status !== 'success') { return; }
 		const callRendered = new MermaidRenderer().render(callResult.model);
+		assert.ok(callRendered.mermaidText.includes('participant caller as caller'));
 		assert.ok(callRendered.mermaidText.includes('participant root as self'));
 		assert.ok(callRendered.mermaidText.includes('root->>results: append'));
 		assert.ok(callRendered.mermaidText.includes('root->>service: await save'));
-		assert.ok(callRendered.mermaidText.includes('service-->>root: return results'));
+		assert.ok(callRendered.mermaidText.includes('root-->>caller: return results'));
+		assert.strictEqual(callRendered.mermaidText.includes('results-->>root: return results'), false);
+		assert.strictEqual(callRendered.mermaidText.includes('service-->>root: return results'), false);
 		assert.ok(callRendered.mermaidText.indexOf('root->>results') < callRendered.mermaidText.indexOf('root->>service'));
-		assert.ok(callRendered.mermaidText.indexOf('root->>service') < callRendered.mermaidText.indexOf('service-->>root'));
+		assert.ok(callRendered.mermaidText.indexOf('root->>service') < callRendered.mermaidText.indexOf('root-->>caller'));
 		assert.ok(callRendered.mermaidText.includes('activate root'));
 		assert.ok(callRendered.mermaidText.includes('activate results'));
 		assert.ok(callRendered.mermaidText.includes('activate service'));
@@ -196,7 +199,8 @@ suite('Python function flow', () => {
 		const nestedRendered = new MermaidRenderer().render(nestedResult.model);
 		assert.ok(nestedRendered.mermaidText.indexOf('root->>helper: inner') < nestedRendered.mermaidText.indexOf('root->>service: outer'));
 		assert.ok(nestedRendered.mermaidText.indexOf('activate helper') < nestedRendered.mermaidText.indexOf('deactivate helper'));
-		assert.ok(nestedRendered.mermaidText.indexOf('activate service') < nestedRendered.mermaidText.indexOf('service-->>root: return'));
+		assert.ok(nestedRendered.mermaidText.indexOf('activate service') < nestedRendered.mermaidText.indexOf('root-->>caller: return'));
+		assert.strictEqual(nestedRendered.mermaidText.includes('service-->>root: return'), false);
 		assert.ok(nestedRendered.mermaidText.includes('participant helper as helper'));
 		assert.ok(nestedRendered.mermaidText.includes('participant service as service'));
 
@@ -245,6 +249,7 @@ suite('Python function flow', () => {
 		assert.strictEqual(result.canCopyMermaid, true);
 		assert.strictEqual(result.mermaidText, new MermaidRenderer().render(result.model).mermaidText);
 		assert.ok(result.mermaidText.includes('participant root as self'));
+		assert.ok(result.mermaidText.includes('participant caller as caller'));
 		assert.ok(result.mermaidText.includes('participant service as service'));
 		assert.ok(result.mermaidText.includes('participant logger as logger'));
 		assert.ok(result.mermaidText.includes('participant Unknown as Unknown'));
@@ -253,6 +258,7 @@ suite('Python function flow', () => {
 		assert.ok(result.mermaidText.includes('root->>Unresolved: run (unresolved)'));
 		assert.ok(result.mermaidText.includes('await save'));
 		assert.ok(result.mermaidText.includes('return build_result(...)'));
+		assert.strictEqual(result.mermaidText.includes('service-->>root: return build_result'), false);
 		assert.ok(result.mermaidText.includes('activate root'));
 		assert.ok(result.mermaidText.includes('deactivate root'));
 		const serviceActivations = (result.mermaidText.match(/^activate service$/gm) ?? []).length;
@@ -261,6 +267,16 @@ suite('Python function flow', () => {
 		assert.strictEqual(serviceActivations, serviceDeactivations);
 		assert.ok(result.sourceMap.length > 0);
 		assert.ok(result.sourceMap.every(entry => entry.sourceLocation.uri === source.uri));
+		const returnNode = result.model.nodes.find(node => node.kind === 'return');
+		assert.ok(returnNode);
+		if (returnNode) {
+			const returnEntry = result.sourceMap.find(entry => entry.nodeId === returnNode.id);
+			assert.ok(returnEntry);
+			if (returnEntry) {
+				const returnLine = Number(returnEntry.elementId.replace('line:', ''));
+				assert.strictEqual(result.mermaidText.split('\n')[returnLine - 1], 'root-->>caller: return build_result(...)');
+			}
+		}
 
 		const view = createVisualizationViewModel(result);
 		assert.strictEqual(view.mermaidText, result.mermaidText);
