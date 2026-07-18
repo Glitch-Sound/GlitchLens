@@ -299,7 +299,7 @@
   - _Boundary: Python flow regression, MermaidRenderer tests_
   - _Requirements: 2.2, 2.3, 2.8, 2.13, 2.14, 3.3, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.5, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.2, 7.3, 7.4, 7.6_
 
-- [ ] 17.3 Python self フォールバックの表示・コピー統合と品質ゲートを完了する
+- [x] 17.3 Python self フォールバックの表示・コピー統合と品質ゲートを完了する
   - self fallback、Unknown exception、Unresolved external を含む Python の正規 Mermaid text が、WebView、fallback、Clipboard で byte-for-byte 一致することを確認する。
   - TypeScript / JavaScript と同じ共通 Renderer 契約を使い、Python 専用の Renderer / WebView / Clipboard 分岐を追加しないことを検証する。
   - 型検査、lint、unit test、compile、integration test、package を実行し、CodeLens、Workspace Trust、cache、caller entry、return、SourceMap が回帰しないことを確認する。

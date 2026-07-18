@@ -670,6 +670,66 @@ suite('VisualizationView', () => {
 		assert.deepStrictEqual(clipboard.writes, [selfCallMermaid, selfCallMermaid]);
 	});
 
+	test('keeps Python self fallback, Unknown exception, and Unresolved external Mermaid identical across display and Clipboard', async () => {
+		const factory = new StubPanelFactory();
+		const clipboard = new StubClipboard();
+		const adapter = new WebviewVisualizationAdapter(factory, clipboard, new StubNotification());
+		const pythonMermaid = [
+			'sequenceDiagram',
+			'participant caller as caller',
+			'participant root as self',
+			'participant service as service',
+			'participant Unknown as Unknown',
+			'participant Unresolved as Unresolved',
+			'caller->>root: invoke',
+			'activate root',
+			'root->>root: await validate_order',
+			'activate root',
+			'Note right of root: await validate_order',
+			'deactivate root',
+			'root->>service: save',
+			'root->>Unresolved: notify (unresolved)',
+			'Note over root,Unresolved: unresolved external',
+			'root->>Unknown: load',
+			'Note over root,Unknown: recoverable analysis error',
+			'root-->>caller: return result',
+			'deactivate root',
+			'',
+		].join('\n');
+		const model = createVisualizationViewModel(successResult('partial', {
+			mermaidText: pythonMermaid,
+			notices: [
+				notice('unresolved-call', 'warning', 'Unresolved external call.'),
+				notice('unknown-call', 'warning', 'Recoverable analysis error.'),
+			],
+		}));
+
+		assert.strictEqual(model.mermaidText, pythonMermaid);
+		assert.strictEqual(model.fallbackText, pythonMermaid);
+		assert.strictEqual(model.renderMode, 'mermaid');
+		await adapter.show(model);
+		const html = factory.panel.webview.html;
+		assert.ok(html.includes('participant root as self'));
+		assert.ok(html.includes('root-&gt;&gt;root: await validate_order'));
+		assert.ok(html.includes('participant Unknown as Unknown'));
+		assert.ok(html.includes('participant Unresolved as Unresolved'));
+		const payloadMatch = html.match(/const GLITCHLENS_VIEW_MODEL=(\{.*?\});const vscode=/);
+		assert.ok(payloadMatch);
+		assert.strictEqual(JSON.parse(payloadMatch?.[1] ?? '{}').mermaidText, pythonMermaid);
+
+		const fallbackModel = createVisualizationViewModel(successResult('partial', { mermaidText: pythonMermaid }), { forceFallback: true });
+		await adapter.show(fallbackModel);
+		const fallbackDom = new JSDOM(factory.panel.webview.html);
+		assert.strictEqual(fallbackDom.window.document.querySelector('.diagram-fallback pre')?.textContent, pythonMermaid);
+		fallbackDom.window.close();
+		factory.panel.emitMessage({ type: 'copyMermaid', viewId: factory.panel.currentViewId() });
+		await clipboard.flush();
+		assert.deepStrictEqual(clipboard.writes, [pythonMermaid]);
+
+		const viewSource = fs.readFileSync(path.resolve(__dirname, '../../src/integration/visualizationView.ts'), 'utf8');
+		assert.strictEqual(/python|Python/.test(viewSource), false, 'VisualizationView must remain language-independent');
+	});
+
 	test('does not copy failure or missing Mermaid text and notifies the reason', async () => {
 		const factory = new StubPanelFactory();
 		const clipboard = new StubClipboard();
