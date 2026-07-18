@@ -203,7 +203,7 @@
   - _Boundary: Python flow regression / MermaidRenderer tests_
   - _Requirements: 2.13, 3.3, 3.6, 6.5, 6.6, 6.8_
 
-- [ ] 14.2 Python の caller 表示・コピーと言語横断回帰を検証する
+- [x] 14.2 Python の caller 表示・コピーと言語横断回帰を検証する
   - Python の caller を含む正規 Mermaid text が、WebView 描画入力、詳細表示、fallback、Clipboard で同一となり、Python 専用 Renderer / WebView / Clipboard 分岐がないことを確認する。
   - TypeScript / JavaScript と Python の return / await / partial fixture を比較し、caller 名を Python の関数名、class 名、module 名、file 名から推測しないことを確認する。
   - `npm run check-types`、`npm run lint`、`npm run test:unit`、`npm run compile`、`npm run test:integration`、`npm run package` を実行する。

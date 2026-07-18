@@ -320,6 +320,52 @@ suite('Python function flow', () => {
 		assert.ok(tsResult.mermaidText.includes('await save'));
 		assert.ok(tsResult.mermaidText.includes('return build_result(...)'));
 	});
+
+	test('uses the shared caller participant without inferring Python or TypeScript names', async () => {
+		const pythonText = [
+			'class OrdersService:',
+			'    async def process_orders(self, service):',
+			'        await service.save()',
+			'        return result',
+		].join('\n');
+		const pythonSource = { uri: 'file:///workspace/orders_service.py', languageId: 'python', version: 1, text: pythonText } as const;
+		const pythonCandidate = new PythonFunctionLocator().findFunctionContainingOffset(pythonSource, pythonText.indexOf('process_orders'));
+		assert.strictEqual(pythonCandidate.status, 'found');
+		if (pythonCandidate.status !== 'found') { return; }
+		const pythonResult = await new VisualizeFunctionFlowUseCase(new AnalyzerRegistry([new PythonAnalyzer()]), new MermaidRenderer()).execute({
+			source: pythonSource,
+			cursorOffset: pythonText.indexOf('process_orders'),
+			functionRange: pythonCandidate.function.range,
+			configuration: { configurationDigest: 'python-cross-language' },
+			cancellation: { isCancellationRequested: false },
+		});
+		assert.ok(pythonResult.status === 'success' || pythonResult.status === 'partial');
+		if (pythonResult.status !== 'success' && pythonResult.status !== 'partial') { return; }
+
+		const typescriptText = 'async function process_orders(service: Service) {\n  await service.save();\n  return result;\n}';
+		const typescriptSource = { uri: 'file:///workspace/orders_service.ts', languageId: 'typescript', version: 1, text: typescriptText } as const;
+		const typescriptCandidate = new TypeScriptFunctionLocator().findFunctionContainingOffset(typescriptSource, typescriptText.indexOf('process_orders'));
+		assert.strictEqual(typescriptCandidate.status, 'found');
+		if (typescriptCandidate.status !== 'found') { return; }
+		const typescriptResult = await new VisualizeFunctionFlowUseCase(new AnalyzerRegistry([new TypeScriptAnalyzer()]), new MermaidRenderer()).execute({
+			source: typescriptSource,
+			cursorOffset: typescriptText.indexOf('process_orders'),
+			functionRange: typescriptCandidate.function.range,
+			configuration: { configurationDigest: 'typescript-cross-language' },
+			cancellation: { isCancellationRequested: false },
+		});
+		assert.strictEqual(typescriptResult.status, 'success');
+		if (typescriptResult.status !== 'success') { return; }
+
+		for (const mermaid of [pythonResult.mermaidText, typescriptResult.mermaidText]) {
+			assert.ok(mermaid.includes('participant caller as caller'));
+			assert.ok(mermaid.includes('root-->>caller: return result'));
+			assert.strictEqual(mermaid.includes('process_orders as process_orders'), false);
+			assert.strictEqual(mermaid.includes('OrdersService as OrdersService'), false);
+			assert.strictEqual(mermaid.includes('orders_service as orders_service'), false);
+			assert.strictEqual(mermaid.includes('service-->>root: return result'), false);
+		}
+	});
 });
 
 class PythonStubPanelFactory implements WebviewPanelFactory {
