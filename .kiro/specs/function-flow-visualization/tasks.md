@@ -796,7 +796,7 @@
   - _Boundary: MermaidRenderer, Flow Model contract tests_
   - _Requirements: 4.1, 4.3, 4.5, 6.1, 6.2, 6.3, 6.4, 16.3, 16.5, 16.6, 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7_
 
-- [ ] 29.4 self フォールバックの表示・コピー統合を検証する
+- [x] 29.4 self フォールバックの表示・コピー統合を検証する
   - Renderer が生成した self fallback、Unknown exception、Unresolved external を含む正規 Mermaid text を、WebView、fallback、Clipboard が変換せず共有する。
   - コードジャンプと SourceMap が self Note と recoverable error の位置を保持し、synthetic entry と return の既存契約を変更しないことを確認する。
   - Observable completion: 表示 Mermaid、fallback、Clipboard の内容が byte-for-byte で一致し、self fallback 図で操作元コードへ移動できる。

@@ -90,7 +90,7 @@ suite('Extension Test Suite', () => {
 		}
 	});
 
-	test('cursor command displays partial result with unknown and unresolved notices', async () => {
+	test('cursor command keeps extractable calls on self while reporting unsupported syntax', async () => {
 		await activateExtensionUnderTest();
 		await resetProbe();
 		const document = await vscode.workspace.openTextDocument({
@@ -111,13 +111,13 @@ suite('Extension Test Suite', () => {
 
 		const state = await waitForProbeModel();
 		assert.strictEqual(state.lastModel?.state, 'partial');
-		assert.ok(state.lastModel?.mermaidText?.includes('unknown call'));
-		assert.ok(state.lastModel?.notices.some(notice => notice.kind === 'unresolved-call'));
-		assert.ok(state.lastModel?.notices.some(notice => notice.kind === 'unknown-call'));
+		assert.ok(state.lastModel?.mermaidText?.includes('Note right of root: getTarget'));
+		assert.ok(!state.lastModel?.notices.some(notice => notice.kind === 'unresolved-call'));
+		assert.ok(!state.lastModel?.notices.some(notice => notice.kind === 'unknown-call'));
 		assert.ok(state.lastModel?.notices.some(notice => notice.kind === 'unsupported-syntax'));
 	});
 
-	test('CodeLens command passes the selected function range into complete and unresolved visualization flows', async () => {
+	test('CodeLens command passes the selected function range into complete and self-fallback visualization flows', async () => {
 		await activateExtensionUnderTest();
 		await resetProbe();
 		const document = await openFixtureFile('codelens-flow.ts', [
@@ -146,9 +146,10 @@ suite('Extension Test Suite', () => {
 
 		await vscode.commands.executeCommand(secondCommand.command, ...(secondCommand.arguments ?? []));
 		state = await waitForProbeModel(model => model.rootFunctionName === 'second');
-		assert.strictEqual(state.lastModel?.state, 'partial');
+		assert.strictEqual(state.lastModel?.state, 'success');
 		assert.strictEqual(state.lastModel?.rootFunctionName, 'second');
-		assert.ok(state.lastModel?.notices.some(notice => notice.kind === 'unresolved-call'));
+		assert.ok(state.lastModel?.mermaidText?.includes('Note right of root: getTarget'));
+		assert.ok(!state.lastModel?.notices.some(notice => notice.kind === 'unresolved-call'));
 	});
 
 	test('copies displayed Mermaid text and reports when copy is unavailable', async () => {
