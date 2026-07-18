@@ -291,7 +291,7 @@
   - _Boundary: PythonAnalyzer_
   - _Requirements: 2.1, 2.2, 2.3, 3.1, 3.2, 3.4, 4.1, 4.2, 4.3, 4.4, 5.4, 6.1, 6.2, 6.3, 6.4, 6.6, 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 17.2 Python Flow Model の self・Unknown・Unresolved 描画を回帰検証する
+- [x] 17.2 Python Flow Model の self・Unknown・Unresolved 描画を回帰検証する
   - self fallback、明示 external participant、external Unresolved、recoverable Unknown を共通 Renderer へ渡し、participant、Note、activation、diagnostic を検証する。
   - await、nested Call、return、raise、partial result の処理順と SourceMap を検証し、全体解析失敗では Unknown Mermaid を作らず既存 failure notification のままであることを確認する。
   - Observable completion: Python fixture が self fallback の nested activation と Note、error path の Unknown、external path の Unresolved、全体 failure の Mermaid 不在を期待値どおりに返す。

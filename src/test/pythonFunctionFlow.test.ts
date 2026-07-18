@@ -114,6 +114,57 @@ suite('Python function flow', () => {
 		assert.deepStrictEqual(calls[1].participant, { key: 'unknown', label: 'Unknown', kind: 'unknown' });
 		assert.ok(result.diagnostics.some(diagnostic => diagnostic.kind === 'unknown-call' && diagnostic.nodeId === calls[1].id));
 		assert.ok(calls[0].order < calls[1].order);
+		const rendered = new MermaidRenderer().render(result.model);
+		assert.ok(rendered.mermaidText.includes('participant Unknown as Unknown'));
+		assert.ok(rendered.mermaidText.includes('root->>Unknown: unknown call'));
+		assert.ok(rendered.mermaidText.includes('Note over root,Unknown: unknown call'));
+		const unknownEntry = rendered.sourceMap.find(entry => entry.nodeId === calls[1].id);
+		assert.ok(unknownEntry);
+		if (unknownEntry) {
+			assert.strictEqual(rendered.mermaidText.split('\n')[Number(unknownEntry.elementId.replace('line:', '')) - 1], 'root->>Unknown: unknown call');
+		}
+	});
+
+	test('does not manufacture an Unknown Mermaid diagram for a fatal Python analysis failure', async () => {
+		const text = 'def target():\n    return 1\n';
+		const source = { uri: 'file:///workspace/fatal.py', languageId: 'python', version: 1, text } as const;
+		const candidate = new PythonFunctionLocator().findFunctionContainingOffset(source, text.indexOf('target'));
+		assert.strictEqual(candidate.status, 'found');
+		if (candidate.status !== 'found') { return; }
+		const result = await new VisualizeFunctionFlowUseCase(new AnalyzerRegistry([new PythonAnalyzer()]), new MermaidRenderer()).execute({
+			source,
+			cursorOffset: text.length + 1,
+			functionRange: candidate.function.range,
+			configuration: { configurationDigest: 'python-fatal-failure' },
+			cancellation: { isCancellationRequested: false },
+		});
+		assert.strictEqual(result.status, 'target-not-found');
+		assert.strictEqual('mermaidText' in result, false);
+		assert.strictEqual(result.canCopyMermaid, false);
+		assert.ok(result.notices.some(notice => notice.kind === 'target-not-found'));
+	});
+
+	test('renders an explicitly external but unresolved Python call as Unresolved', async () => {
+		const text = 'def target(service):\n    service.save()\n    validate_order()\n';
+		const analyzed = await new PythonAnalyzer().analyze(input(text, text.indexOf('target')));
+		assert.strictEqual(analyzed.status, 'success');
+		if (analyzed.status !== 'success') { return; }
+		const serviceCall = analyzed.model.nodes.find(node => node.kind === 'call' && node.calleeName === 'save');
+		assert.ok(serviceCall);
+		if (!serviceCall || serviceCall.kind !== 'call') { return; }
+		const model = {
+			...analyzed.model,
+			nodes: analyzed.model.nodes.map(node => node.id === serviceCall.id
+				? { ...node, resolution: 'unresolved' as const, participant: { key: 'unresolved', label: 'Unresolved', kind: 'unresolved' as const } }
+				: node),
+		};
+		const rendered = new MermaidRenderer().render(model);
+		assert.ok(rendered.mermaidText.includes('participant Unresolved as Unresolved'));
+		assert.ok(rendered.mermaidText.includes('root->>Unresolved: save (unresolved)'));
+		assert.ok(rendered.mermaidText.includes('Note over root,Unresolved: unresolved call'));
+		assert.ok(rendered.mermaidText.includes('Note right of root: validate_order'));
+		assert.strictEqual(rendered.mermaidText.includes('participant validate_order as validate_order'), false);
+		assert.ok(rendered.sourceMap.some(entry => entry.nodeId === serviceCall.id));
 	});
 
 	test('handles assignments, except bindings, loop exits, and concise control labels', async () => {
