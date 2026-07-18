@@ -43,6 +43,118 @@ suite('MermaidRenderer', () => {
 		assert.strictEqual(result.sourceMap.some(entry => entry.elementId === `line:${entryLine + 1}`), false);
 	});
 
+	test('keeps the synthetic caller invocation stable across call and terminal states', () => {
+		const returnNode = {
+			id: 'node:return-entry-matrix',
+			kind: 'return' as const,
+			order: 2,
+			sourceLocation: location(4, 2, 4, 20),
+			expression: 'result',
+		};
+		const throwNode = {
+			id: 'node:throw-entry-matrix',
+			kind: 'throw' as const,
+			order: 2,
+			sourceLocation: location(4, 2, 4, 20),
+			expression: 'error',
+		};
+		const fixtures: readonly { name: string; model: FlowModel; expected?: readonly string[] }[] = [
+			{
+				name: 'normal call',
+				model: {
+					...createModel({
+						nodes: [call('node:normal', 1, 'normal', 'resolved')],
+						edges: [edge('edge:normal', 'node:normal', 1)],
+					}),
+					rootFunction: {
+						...createModel().rootFunction,
+						name: 'Service.loadUser',
+					},
+					source: {
+						...createModel().source,
+						uri: 'file:///workspace/src/service.ts',
+					},
+				},
+				expected: ['root->>normal: normal'],
+			},
+			{
+				name: 'await call',
+				model: createModel(),
+				expected: ['root->>saveUser: await saveUser'],
+			},
+			{
+				name: 'nested calls',
+				model: createModel({
+					nodes: [call('node:outer-entry', 1, 'outer', 'resolved'), call('node:inner-entry', 2, 'inner', 'resolved')],
+					edges: [edge('edge:outer-entry', 'node:outer-entry', 1), edge('edge:inner-entry', 'node:inner-entry', 2, 'next', 'node:outer-entry')],
+				}),
+				expected: ['root->>outer: outer', 'root->>inner: inner'],
+			},
+			{
+				name: 'unknown and unresolved calls',
+				model: createModel({
+					nodes: [call('node:unknown-entry', 1, 'unknownTarget', 'unknown'), call('node:unresolved-entry', 2, 'unresolvedTarget', 'unresolved')],
+					edges: [edge('edge:unknown-entry', 'node:unknown-entry', 1), edge('edge:unresolved-entry', 'node:unresolved-entry', 2)],
+					completeness: 'partial',
+				}),
+				expected: ['root->>Unknown: unknown call', 'root->>unresolvedTarget: unresolvedTarget (unresolved)'],
+			},
+			{
+				name: 'partial result',
+				model: createModel({
+					nodes: [call('node:partial-entry', 1, 'known', 'resolved')],
+					edges: [edge('edge:partial-entry', 'node:partial-entry', 1), edge('edge:missing-entry', 'node:missing-entry', 2)],
+					completeness: 'partial',
+				}),
+				expected: ['root->>known: known'],
+			},
+			{
+				name: 'return',
+				model: createModel({
+					nodes: [returnNode],
+					edges: [edge('edge:return-entry-matrix', returnNode.id, 1, 'return')],
+				}),
+				expected: ['root-->>caller: return result'],
+			},
+			{
+				name: 'throw',
+				model: createModel({
+					nodes: [throwNode],
+					edges: [edge('edge:throw-entry-matrix', throwNode.id, 1, 'throw')],
+				}),
+				expected: ['Note over root: throw error'],
+			},
+		];
+
+		for (const fixture of fixtures) {
+			const result = new MermaidRenderer().render(fixture.model);
+			const lines = result.mermaidText.trimEnd().split('\n');
+			const entryLine = lines.indexOf('caller->>root: invoke');
+			const participantLines = lines.reduce<number[]>((indexes, line, index) => {
+				if (line.startsWith('participant ')) {
+					indexes.push(index);
+				}
+				return indexes;
+			}, []);
+			const rootActivationLine = lines.indexOf('activate root');
+
+			assert.strictEqual(lines.filter(line => line === 'caller->>root: invoke').length, 1, fixture.name);
+			assert.ok(entryLine > Math.max(...participantLines), fixture.name);
+			assert.ok(entryLine < rootActivationLine, fixture.name);
+			assert.strictEqual(result.sourceMap.some(entry => entry.elementId === `line:${entryLine + 1}`), false, fixture.name);
+			assert.strictEqual(result.mermaidText.includes('participant caller as caller'), true, fixture.name);
+			assert.strictEqual(result.mermaidText.includes('participant loadUser as loadUser'), false, fixture.name);
+			assert.strictEqual(result.mermaidText.includes('participant Service as Service'), false, fixture.name);
+			assert.strictEqual(result.mermaidText.includes('participant service as service'), false, fixture.name);
+			for (const expected of fixture.expected ?? []) {
+				assert.strictEqual(result.mermaidText.includes(expected), true, `${fixture.name}: ${expected}`);
+			}
+			if (fixture.name === 'return') {
+				assert.strictEqual(result.mermaidText.includes('-->>root: return result'), false);
+			}
+		}
+	});
+
 	test('emits canonical participant activations for calls and terminal returns', () => {
 		const result = new MermaidRenderer().render(createModel());
 		const lines = result.mermaidText.trimEnd().split('\n');

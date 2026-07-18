@@ -701,7 +701,7 @@
   - _Boundary: MermaidRenderer / RenderContext_
   - _Requirements: 16.1, 16.8, 17.5_
 
-- [ ] 27.2 synthetic entry の Renderer 回帰を追加する
+- [x] 27.2 synthetic entry の Renderer 回帰を追加する
   - 通常 Call、await、nested Call、Unknown / Unresolved、partial result、return、throw の fixture で、entry が participant 宣言後・関数本体前に一度だけ出力されることを検証する。
   - entry が FlowNode / FlowEdge の SourceMap を生成せず、return の SourceMap、callee activation の終了、既存の diagnostic と処理順が維持されることを検証する。
   - caller 名が対象関数名、class 名、module 名、file 名から推測されず、entry の追加で return の送信元・送信先が変わらないことを検証する。
