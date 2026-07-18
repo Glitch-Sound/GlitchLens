@@ -9,7 +9,7 @@ import { directChildren, firstChildNamed, parsePython } from './pythonParser';
 
 export class PythonAnalyzer implements LanguageAnalyzer {
 	public readonly id = 'python';
-	public readonly version = '1.0.3';
+	public readonly version = '1.0.4';
 	public readonly languageIds = ['python'] as const;
 	private readonly locator = new PythonFunctionLocator();
 
@@ -89,7 +89,7 @@ class PythonFlowBuilder {
 		};
 		return {
 			metadata: {
-				schemaVersion: '1.0.0', analyzerId: 'python', analyzerVersion: '1.0.3', languageId: 'python',
+				schemaVersion: '1.0.0', analyzerId: 'python', analyzerVersion: '1.0.4', languageId: 'python',
 				generatedAt: new Date().toISOString(), sourceDocumentVersion: this.input.source.version,
 				completeness: this.completeness, configurationDigest: this.input.configuration.configurationDigest,
 				rootFunctionIdentifier: rootFunction.id,
@@ -245,15 +245,20 @@ class PythonFlowBuilder {
 
 	private callInfo(expression: SyntaxNode | undefined, call: SyntaxNode): { readonly name: string; readonly participant?: FlowParticipant; readonly invocationTarget?: FlowInvocationTarget; readonly resolution: 'resolved' | 'unknown' | 'unresolved'; readonly message: string } {
 		if (!expression) { return { name: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Call target could not be named statically.' }; }
+		// A call node containing an error node is the exceptional case where we
+		// cannot construct a reliable call result. Keep its source range and emit
+		// an Unknown call; parser errors elsewhere must not affect valid calls.
+		if (this.containsError(call)) {
+			return { name: this.operationName(expression), participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Call target could not be parsed completely.' };
+		}
 		const text = this.text(expression);
-		if (expression.name === 'VariableName') { return { name: text, participant: fallbackParticipant('unknown'), resolution: 'resolved', message: '' }; }
+		if (expression.name === 'VariableName') { return { name: text, participant: undefined, invocationTarget: 'self', resolution: 'resolved', message: '' }; }
 		if (expression.name === 'MemberExpression' && !text.includes('(')) {
 			const children = directChildren(expression);
-			const property = children[children.length - 1];
 			const receiver = children[0];
-			const name = property ? this.text(property) : text.split('.').pop() ?? text;
-			if (children.some(child => child.name === '[' || child.name === ']')) {
-				return { name: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Computed Python call target could not be named statically.' };
+			const name = this.operationName(expression);
+			if (text.includes('[')) {
+				return { name, participant: undefined, invocationTarget: 'self', resolution: 'resolved', message: '' };
 			}
 			if (receiver?.name === 'VariableName') {
 				if (this.text(receiver) === 'self') {
@@ -261,10 +266,37 @@ class PythonFlowBuilder {
 				}
 				return { name, participant: namedParticipant(/^[A-Z]/.test(this.text(receiver)) ? 'class' : 'instance', this.text(receiver)), resolution: 'resolved', message: '' };
 			}
-			return { name, participant: fallbackParticipant('unresolved'), resolution: 'unresolved', message: `Call target "${name}" has a dynamic receiver and was kept unresolved.` };
+			// Chained, computed, and otherwise dynamic receivers are still
+			// extractable calls, but their external instance cannot be identified.
+			// Treat them as calls on the current instance instead of inventing a
+			// participant (or an Unresolved lifecycle).
+			return { name, participant: undefined, invocationTarget: 'self', resolution: 'resolved', message: '' };
 		}
-		if (text.includes('[') || text.startsWith('getattr')) { return { name: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Dynamic Python call target could not be named statically.' }; }
-		return { name: text || '<unknown>', participant: fallbackParticipant('unresolved'), resolution: 'unresolved', message: `Call target "${text || call.name}" could not be fully resolved statically.` };
+		// A dynamic callable (for example getattr(...)(...)) is syntactically
+		// represented by a CallExpression target. It is extractable, so use the
+		// self fallback while retaining a stable operation label.
+		if (text.includes('[') || text.startsWith('getattr') || expression.name === 'CallExpression') {
+			return { name: this.operationName(expression), participant: undefined, invocationTarget: 'self', resolution: 'resolved', message: '' };
+		}
+		return { name: text || '<unknown>', participant: undefined, invocationTarget: 'self', resolution: 'resolved', message: '' };
+	}
+
+	private operationName(expression: SyntaxNode): string {
+		if (expression.name === 'VariableName') { return this.text(expression); }
+		if (expression.name === 'MemberExpression') {
+			const children = directChildren(expression);
+			const property = children[children.length - 1];
+			if (property && !['[', ']', '.'].includes(property.name)) { return this.text(property); }
+		}
+		return this.text(expression) || '<unknown>';
+	}
+
+	private containsError(node: SyntaxNode): boolean {
+		let found = false;
+		node.cursor().iterate(cursorNode => {
+			if (cursorNode.type.isError) { found = true; }
+		});
+		return found;
 	}
 
 	private tryClauses(statement: SyntaxNode): readonly TryClause[] {

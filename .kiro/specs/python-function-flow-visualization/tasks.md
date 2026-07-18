@@ -277,3 +277,33 @@
 - Task 16.1 完了後: `self` だけを明示的な自己 receiver として分類し、direct / dynamic call の既存 fallback を自己呼び出しへ誤分類していないことを確認する。
 - Task 16.2 完了後: Python Flow Model が共通 Renderer の root activation と Note を利用し、Python 専用 participant / self arrow / Renderer 分岐を要求していないことを確認する。
 - Task 16.3 完了後: Python の WebView、fallback、Clipboard が自己呼び出し Note を含む同一 Mermaid text を利用し、全品質ゲートが成功することを確認する。
+
+## Python Call の self フォールバック追加タスク
+
+- [ ] 17. Python の抽出可能な非 external Call を self として表示する
+
+- [x] 17.1 Python Call 主体の分類を self フォールバックへ更新する
+  - direct、chain、computed、dynamic Call を、抽出可能で明示 external receiver を構築できない場合に self target として出力する。
+  - `self` 以外の単一識別子 receiver は従来どおり class / instance participant とし、receiver 不明だけでは Unknown を生成しない。
+  - source range と処理順を保持できる recoverable な解析エラーだけを Unknown と diagnostic で表し、解析規則変更に合わせてキャッシュを無効化する。
+  - Observable completion: Python Analyzer fixture が self fallback、named external、recoverable Unknown を区別し、Call 順序を維持した Flow Model を返す。
+  - _Depends: function-flow-visualization:29.1_
+  - _Boundary: PythonAnalyzer_
+  - _Requirements: 2.1, 2.2, 2.3, 3.1, 3.2, 3.4, 4.1, 4.2, 4.3, 4.4, 5.4, 6.1, 6.2, 6.3, 6.4, 6.6, 7.1, 7.2, 7.3, 7.4_
+
+- [ ] 17.2 Python Flow Model の self・Unknown・Unresolved 描画を回帰検証する
+  - self fallback、明示 external participant、external Unresolved、recoverable Unknown を共通 Renderer へ渡し、participant、Note、activation、diagnostic を検証する。
+  - await、nested Call、return、raise、partial result の処理順と SourceMap を検証し、全体解析失敗では Unknown Mermaid を作らず既存 failure notification のままであることを確認する。
+  - Observable completion: Python fixture が self fallback の nested activation と Note、error path の Unknown、external path の Unresolved、全体 failure の Mermaid 不在を期待値どおりに返す。
+  - _Depends: function-flow-visualization:29.3, 17.1_
+  - _Boundary: Python flow regression, MermaidRenderer tests_
+  - _Requirements: 2.2, 2.3, 2.8, 2.13, 2.14, 3.3, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.5, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.2, 7.3, 7.4, 7.6_
+
+- [ ] 17.3 Python self フォールバックの表示・コピー統合と品質ゲートを完了する
+  - self fallback、Unknown exception、Unresolved external を含む Python の正規 Mermaid text が、WebView、fallback、Clipboard で byte-for-byte 一致することを確認する。
+  - TypeScript / JavaScript と同じ共通 Renderer 契約を使い、Python 専用の Renderer / WebView / Clipboard 分岐を追加しないことを検証する。
+  - 型検査、lint、unit test、compile、integration test、package を実行し、CodeLens、Workspace Trust、cache、caller entry、return、SourceMap が回帰しないことを確認する。
+  - Observable completion: Python と既存言語の品質ゲートが成功し、表示・コピー・fallback が同一 Mermaid text を共有する。
+  - _Depends: function-flow-visualization:29.4, 17.2_
+  - _Boundary: Python flow integration, VisualizationView, ClipboardAdapter, Integration validation_
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.4, 2.5, 2.6, 2.7, 2.9, 2.10, 2.11, 2.12, 3.3, 3.5, 3.6, 4.3, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.5, 6.6, 6.7, 6.8, 6.9, 7.5, 7.6_

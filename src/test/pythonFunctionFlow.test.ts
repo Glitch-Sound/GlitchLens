@@ -67,18 +67,19 @@ suite('Python function flow', () => {
 		assert.ok(result.status === 'success' || result.status === 'partial');
 		if (result.status !== 'success' && result.status !== 'partial') { return; }
 		const calls = result.model.nodes.filter(node => node.kind === 'call');
-		assert.deepStrictEqual(calls.map(node => node.calleeName), ['append', 'error', 'save', 'foo', 'run', '<unknown>']);
+		assert.deepStrictEqual(calls.map(node => node.calleeName), ['append', 'error', 'save', 'foo', 'run', 'values[index]']);
 		const participant = (name: string) => calls.find(node => node.calleeName === name)?.participant;
 		assert.deepStrictEqual(participant('append'), { key: 'instance:results', label: 'results', kind: 'instance' });
 		assert.deepStrictEqual(participant('error'), { key: 'instance:logger', label: 'logger', kind: 'instance' });
 		assert.deepStrictEqual(participant('save'), { key: 'class:Service', label: 'Service', kind: 'class' });
-		assert.deepStrictEqual(participant('foo'), { key: 'unknown', label: 'Unknown', kind: 'unknown' });
-		assert.deepStrictEqual(participant('run'), { key: 'unresolved', label: 'Unresolved', kind: 'unresolved' });
-		assert.deepStrictEqual(participant('<unknown>'), { key: 'unknown', label: 'Unknown', kind: 'unknown' });
-		assert.ok(result.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call' || diagnostic.kind === 'unknown-call'));
+		assert.strictEqual(participant('foo'), undefined);
+		assert.strictEqual(participant('run'), undefined);
+		assert.strictEqual(participant('values[index]'), undefined);
+		assert.ok(calls.filter(node => node.invocationTarget === 'self').length >= 3);
+		assert.strictEqual(result.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call' || diagnostic.kind === 'unknown-call'), false);
 	});
 
-	test('classifies explicit self calls without changing direct or dynamic fallbacks', async () => {
+	test('classifies explicit self calls and extractable non-external calls as self', async () => {
 		const text = [
 			'async def target(self, service):',
 			'    self.validate_order() ',
@@ -92,12 +93,27 @@ suite('Python function flow', () => {
 		const calls = result.model.nodes.filter(node => node.kind === 'call');
 		assert.deepStrictEqual(calls.map(node => node.calleeName), ['validate_order', 'save', 'validate_order', 'run']);
 		const selfCalls = calls.filter(node => node.invocationTarget === 'self');
-		assert.deepStrictEqual(selfCalls.map(node => node.calleeName), ['validate_order', 'save']);
+		assert.deepStrictEqual(selfCalls.map(node => node.calleeName), ['validate_order', 'save', 'validate_order', 'run']);
 		assert.ok(selfCalls.every(node => node.participant === undefined));
-		const direct = calls.find(node => node.calleeName === 'validate_order' && node.invocationTarget !== 'self');
-		assert.deepStrictEqual(direct?.participant, { key: 'unknown', label: 'Unknown', kind: 'unknown' });
-		const dynamic = calls.find(node => node.calleeName === 'run');
-		assert.deepStrictEqual(dynamic?.participant, { key: 'unresolved', label: 'Unresolved', kind: 'unresolved' });
+	});
+
+	test('uses Unknown only for a recoverable malformed call while preserving order', async () => {
+		const text = [
+			'def target():',
+			'    before()',
+			'    broken(',
+		].join('\n');
+		const result = await new PythonAnalyzer().analyze(input(text, text.indexOf('target')));
+		assert.strictEqual(result.status, 'partial');
+		if (result.status !== 'partial') { return; }
+		const calls = result.model.nodes.filter(node => node.kind === 'call');
+		assert.deepStrictEqual(calls.map(node => node.calleeName), ['before', 'broken']);
+		assert.strictEqual(calls[0].invocationTarget, 'self');
+		assert.strictEqual(calls[0].participant, undefined);
+		assert.strictEqual(calls[1].resolution, 'unknown');
+		assert.deepStrictEqual(calls[1].participant, { key: 'unknown', label: 'Unknown', kind: 'unknown' });
+		assert.ok(result.diagnostics.some(diagnostic => diagnostic.kind === 'unknown-call' && diagnostic.nodeId === calls[1].id));
+		assert.ok(calls[0].order < calls[1].order);
 	});
 
 	test('handles assignments, except bindings, loop exits, and concise control labels', async () => {
@@ -120,7 +136,7 @@ suite('Python function flow', () => {
 
 		assert.strictEqual(result.status, 'success');
 		if (result.status !== 'success') { return; }
-		assert.strictEqual(result.model.metadata.analyzerVersion, '1.0.3');
+		assert.strictEqual(result.model.metadata.analyzerVersion, '1.0.4');
 		assert.strictEqual(result.diagnostics.some(diagnostic => diagnostic.message.includes('AssignStatement')), false);
 		const control = result.model.nodes.find(node => node.kind === 'try-catch');
 		const loop = result.model.nodes.find(node => node.kind === 'loop');
@@ -273,8 +289,8 @@ suite('Python function flow', () => {
 		assert.strictEqual(rendered.mermaidText.includes('participant inner as inner'), false);
 		assert.strictEqual(rendered.mermaidText.includes('participant outer as outer'), false);
 		assert.ok(rendered.mermaidText.includes('participant service as service'));
-		assert.ok(rendered.mermaidText.includes('participant Unknown as Unknown'));
-		assert.ok(rendered.mermaidText.includes('participant Unresolved as Unresolved'));
+		assert.strictEqual(rendered.mermaidText.includes('participant Unknown as Unknown'), false);
+		assert.strictEqual(rendered.mermaidText.includes('participant Unresolved as Unresolved'), false);
 		assert.ok(rendered.mermaidText.includes('root-->>caller: return build_result(...)'));
 		assert.strictEqual(rendered.warnings.length, 0);
 		const activationCount = lines.filter(line => line === 'activate root').length;
@@ -338,10 +354,10 @@ suite('Python function flow', () => {
 		assert.strictEqual(result.sourceMap.some(entry => entry.elementId === `line:${entryLine}`), false);
 		assert.ok(result.mermaidText.includes('participant service as service'));
 		assert.ok(result.mermaidText.includes('participant logger as logger'));
-		assert.ok(result.mermaidText.includes('participant Unknown as Unknown'));
-		assert.ok(result.mermaidText.includes('participant Unresolved as Unresolved'));
-		assert.ok(result.mermaidText.includes('root->>Unknown: foo'));
-		assert.ok(result.mermaidText.includes('root->>Unresolved: run (unresolved)'));
+		assert.strictEqual(result.mermaidText.includes('participant Unknown as Unknown'), false);
+		assert.strictEqual(result.mermaidText.includes('participant Unresolved as Unresolved'), false);
+		assert.strictEqual(result.mermaidText.includes('root->>Unknown: foo'), false);
+		assert.strictEqual(result.mermaidText.includes('root->>Unresolved: run (unresolved)'), false);
 		assert.ok(result.mermaidText.includes('await save'));
 		assert.ok(result.mermaidText.includes('return build_result(...)'));
 		assert.ok(result.mermaidText.indexOf('caller->>root: invoke') < result.mermaidText.indexOf('activate root'));
