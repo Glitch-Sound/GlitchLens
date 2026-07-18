@@ -544,6 +544,87 @@ suite('VisualizationView', () => {
 		]);
 	});
 
+	test('keeps caller return Mermaid text identical across Webview, fallback details, and Clipboard', async () => {
+		const factory = new StubPanelFactory();
+		const clipboard = new StubClipboard();
+		const adapter = new WebviewVisualizationAdapter(factory, clipboard, new StubNotification());
+		const callerReturnMermaid = [
+			'sequenceDiagram',
+			'participant caller as caller',
+			'participant root as self',
+			'participant service as service',
+			'activate root',
+			'root->>service: await save',
+			'activate service',
+			'root-->>caller: return result',
+			'deactivate service',
+			'deactivate root',
+			'',
+		].join('\n');
+		const callerReturnSourceMap = [{
+			elementId: 'line:return',
+			nodeId: 'node:return',
+			edgeId: 'edge:return',
+			sourceLocation: testSourceLocation(),
+		}];
+		const model = createVisualizationViewModel(successResult('partial', {
+			mermaidText: callerReturnMermaid,
+			sourceMap: callerReturnSourceMap,
+			notices: [
+				notice('unresolved-call', 'warning', 'Call could not be resolved.'),
+				notice('unknown-call', 'warning', 'Call is unknown.'),
+			],
+		}));
+
+		assert.strictEqual(model.mermaidText, callerReturnMermaid);
+		assert.strictEqual(model.fallbackText, callerReturnMermaid);
+		assert.deepStrictEqual(model.sourceMap, callerReturnSourceMap);
+		await adapter.show(model);
+		const html = factory.panel.webview.html;
+		assert.ok(html.includes('participant caller as caller'));
+		assert.ok(html.includes('root--&gt;&gt;caller: return result'));
+		assert.ok(html.includes('Call could not be resolved.'));
+		assert.ok(html.includes('Call is unknown.'));
+		const payloadMatch = html.match(/const GLITCHLENS_VIEW_MODEL=(\{.*?\});const vscode=/);
+		assert.ok(payloadMatch);
+		const payload = JSON.parse(payloadMatch?.[1] ?? '{}');
+		assert.strictEqual(payload.mermaidText, callerReturnMermaid);
+		assert.deepStrictEqual(payload.sourceMap, callerReturnSourceMap);
+		assert.strictEqual(payload.state, 'partial');
+		assert.deepStrictEqual(payload.notices.map((item: { kind: string }) => item.kind), ['unresolved-call', 'unknown-call']);
+
+		const selectedMessages: Array<{ type: string; elementId?: string }> = [];
+		adapter.onDidReceiveAllowedMessage(message => {
+			if (message.type === 'sourceMapSelected') {
+				selectedMessages.push(message);
+			}
+		});
+		factory.panel.emitMessage({ type: 'sourceMapSelected', elementId: 'line:return' });
+		assert.deepStrictEqual(selectedMessages, [{ type: 'sourceMapSelected', elementId: 'line:return' }]);
+
+		const rendered = await renderWebviewMermaidFixture(callerReturnMermaid);
+		assert.ok(rendered.diagram.textContent?.includes('return result'));
+		const returnGroups = [...rendered.diagram.querySelectorAll<SVGTextElement>('svg text')]
+			.filter(text => text.classList.contains('glitchlens-return-message') || text.parentElement?.classList.contains('glitchlens-return-message'));
+		assert.ok(returnGroups.length > 0, 'return message must receive return decoration');
+		assert.ok(returnGroups.some(group => group.textContent?.includes('return result')));
+		rendered.window.close();
+
+		factory.panel.emitMessage({ type: 'copyMermaid', viewId: factory.panel.currentViewId() });
+		await clipboard.flush();
+		assert.deepStrictEqual(clipboard.writes, [callerReturnMermaid]);
+
+		const fallbackModel = createVisualizationViewModel(successResult('partial', { mermaidText: callerReturnMermaid }), { forceFallback: true });
+		await adapter.show(fallbackModel);
+		const fallbackDom = new JSDOM(factory.panel.webview.html);
+		assert.strictEqual(fallbackDom.window.document.querySelector('#diagram pre')?.textContent, callerReturnMermaid);
+		assert.strictEqual(fallbackDom.window.document.querySelector('.diagram-fallback pre')?.textContent, callerReturnMermaid);
+		fallbackDom.window.close();
+		factory.panel.emitMessage({ type: 'copyMermaid', viewId: factory.panel.currentViewId() });
+		await clipboard.flush();
+		assert.deepStrictEqual(clipboard.writes, [callerReturnMermaid, callerReturnMermaid]);
+	});
+
 	test('does not copy failure or missing Mermaid text and notifies the reason', async () => {
 		const factory = new StubPanelFactory();
 		const clipboard = new StubClipboard();

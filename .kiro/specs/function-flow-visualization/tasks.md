@@ -673,7 +673,7 @@
   - _Boundary: MermaidRenderer tests / MessageLabelFormatter tests_
   - _Requirements: 13.4, 16.1, 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8_
 
-- [ ] 26.3 caller を含む表示・コピー契約を統合検証する
+- [x] 26.3 caller を含む表示・コピー契約を統合検証する
   - Renderer が出力した caller を含む正規 Mermaid text を、WebView の描画入力、詳細表示、fallback、Clipboard が構造変換なしで共有することを検証する。
   - TypeScript / JavaScript の return fixture で、SourceMap、コードジャンプ、unknown / unresolved、partial result、既存の return 装飾が回帰しないことを確認する。
   - `npm run check-types`、`npm run lint`、`npm run test:unit`、`npm run compile`、`npm run test:integration` を実行する。
