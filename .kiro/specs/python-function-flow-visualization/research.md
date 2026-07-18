@@ -96,3 +96,29 @@
 - **Selected Approach**: PythonAnalyzer は caller、synthetic node、または entry edge を生成せず、共通 Renderer が固定 `caller->>root: invoke` を出力する。Python spec は共通 entry の順序・一意性・表示／コピー一致を fixture で検証する。
 - **Rationale**: Python 固有の Renderer / WebView / Clipboard 分岐、caller 名推測、SourceMap の架空エントリを追加せず、TypeScript / JavaScript と同じ Mermaid contract を維持できる。
 - **Follow-up**: 通常 Call、await、partial、unknown / unresolved を含む Python fixture で、entry が本体より前に一度だけ現れ、return と activation の既存契約を壊さないことを確認する。
+
+## Python の明示的な自己呼び出しの設計調査
+
+### Summary
+
+- 現在の `self.method()` は通常 instance participant として扱われ、Renderer 固定 root / self と重複したライフラインになる。
+- PythonAnalyzer が receiver の構文だけから `self` を識別し、共通 Flow Model の自己呼び出し target を設定すれば、Python 専用描画を追加せずに解消できる。
+- 修飾なし direct call はグローバル、import、closure の可能性があるため、自己呼び出しと推測しない。
+
+### Design Decisions
+
+#### Decision: `self` の単一識別子 receiver だけを自己呼び出しにする
+
+- **Alternatives Considered**:
+  1. 修飾なし direct call を同一インスタンス呼び出しとして扱う。
+  2. `self` を通常 participant として維持する。
+  3. `self.method()` だけを共通 self-call target として出力する。
+- **Selected Approach**: 3 を採用する。
+- **Rationale**: Python の静的解析境界を越えて receiver を推測せず、共通 Renderer の正規 Mermaid text を利用できる。
+- **Trade-offs**: direct call の図は Unknown / Unresolved のまま残るが、誤った自己呼び出し表示を避けられる。
+- **Follow-up**: Await→Call edge、nested call、return / raise / partial result、表示・コピー一致を Python fixture で検証する。
+
+### Risks & Mitigations
+
+- `self` 以外の receiver が自己呼び出しへ誤分類されるリスク — VariableName の完全一致で判定する。
+- Python 固有の renderer 分岐が混入するリスク — PythonAnalyzer は Flow Model を出力するだけとし、共通 Renderer / View test で検出する。

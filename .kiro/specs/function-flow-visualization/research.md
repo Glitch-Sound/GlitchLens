@@ -546,3 +546,38 @@
 - **Generalization**: caller は静的な呼び出し解決の結果ではなく、対象関数の外部文脈を示す Renderer 固定の participant と message である。
 - **Build vs. Adopt**: Mermaid sequence diagram の既存 request message 構文と既存 Renderer を利用し、新規ライブラリを導入しない。
 - **Simplification**: caller 名の解決、synthetic FlowModel node、entry 用 SourceMap、言語別 Renderer 分岐を追加しない。
+
+---
+
+## Requirement 18: 自己呼び出し表示の設計調査
+
+### Summary
+
+- `self.method()` と `this.method()` は対象関数自身への呼び出しとして識別できるが、既存の FlowParticipant には root / self を表す種類がない。
+- participant の label から自己呼び出しを推測すると、表示名と主体の同一性を混同するため、Call に明示的な表示宛先を追加する。
+- renderer が root のネスト activation と Note を正規 Mermaid text に出力すれば、WebView と Clipboard の既存共有経路を維持できる。
+
+### Design Decisions
+
+#### Decision: Call の表示宛先を明示する
+
+- **Alternatives Considered**:
+  1. `self` / `this` を通常の instance participant として描画する。
+  2. participant の label が `self` かどうかを Renderer で判定する。
+  3. `FlowCallNode.invocationTarget` で participant と self を明示する。
+- **Selected Approach**: 3 を採用する。
+- **Rationale**: Analyzer が言語構文を解釈し、Renderer は言語非依存の Flow Model を描画する既存境界を維持できる。
+- **Trade-offs**: Common Flow Model の公開 contract を一つ拡張するため、TypeScript / JavaScript / Python の analyzer と renderer の回帰を同時に行う必要がある。
+- **Follow-up**: Note 行の SourceMap、activation の対称性、direct / dynamic call の非誤分類を fixture で確認する。
+
+#### Design Synthesis
+
+- **Generalization**: 自己呼び出しは Python 固有の participant 名問題ではなく、言語横断の Call 表示宛先の問題である。
+- **Build vs. Adopt**: 既存 Common Flow Model と Mermaid の Note / activation 構文を使用し、新規依存を導入しない。
+- **Simplification**: caller のような synthetic node や自己呼び出し専用 Renderer / WebView 分岐を追加しない。
+
+### Risks & Mitigations
+
+- direct call を自己呼び出しへ誤分類するリスク — receiver が `this` / `self` と構文上明示された場合だけ target を設定する。
+- nested activation が不均衡になるリスク — Renderer の既存 stack に root を一段だけ push / pop し、終了数の一致をテストする。
+- Note の SourceMap が操作行を指さないリスク — Note の追加行を Call node と Await→Call edge の source map として登録する。

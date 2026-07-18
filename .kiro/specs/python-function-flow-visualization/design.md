@@ -564,3 +564,56 @@ sequenceDiagram
 - 同テストは `caller->>root: invoke` が関数本体より前に一度だけ出力され、Python の関数名・class 名・module 名・file 名を caller の実在名として推測しないことを検証する。
 - 同テストは nested Call、Unknown / Unresolved、partial result でも、caller 名を Python の関数名・class 名・module 名から推測せず、共通 Renderer の activation と SourceMap を維持することを検証する。
 - TypeScript / JavaScript と Python の同形 Flow Model を同じ共通 Renderer へ渡す回帰により、Python 専用の描画分岐がないことを検証する。
+
+## Python の明示的な自己呼び出し
+
+### Boundary Commitments Amendment
+
+**This Spec Owns**
+
+- PythonAnalyzer が `self.method()` と `await self.method()` を、対象関数自身への呼び出しとして共通 `FlowInvocationTarget` 契約へ変換すること。
+- Python の自己呼び出し、修飾なし direct call、dynamic receiver、await、nested call、terminal、partial result の Flow Model と共通 Renderer 回帰。
+
+**Out of Boundary**
+
+- `FlowInvocationTarget`、MermaidRenderer、root activation、SourceMap、WebView、Clipboard の共通実装を Python 用に変更すること。
+- 修飾なし direct call、chain / computed receiver、`getattr`、実行時 binding を `self` 呼び出しと推測すること。
+
+**Allowed Dependencies**
+
+- `src/analyzers/python/pythonAnalyzer.ts`、Python parser adapter、FlowCallNode、FlowEdge、`function-flow-visualization` の自己呼び出し共通契約、既存 Python renderer regression。
+
+**Revalidation Triggers**
+
+- Python の MemberExpression / VariableName の構文分類、`self` 判定、Await→Call edge、または analyzer version を変更する場合。
+- 共通 `FlowInvocationTarget`、root Note、activation、SourceMap、または fallback participant の規則を変更する場合。
+
+### Integration Decision
+
+PythonAnalyzer は MemberExpression の receiver が単一の `VariableName` で、そのテキストが正確に `self` である場合だけ、Call node に `invocationTarget: 'self'` を設定する。この場合でも `calleeName`、Call の実行順、Await node、Await→Call edge、Return / Throw edge は通常の Call と同じ規則で保持する。
+
+`invocationTarget: 'self'` の Call は Python 固有 participant を持たず、共通 MermaidRenderer が root のネスト activation と Note を出力する。PythonAnalyzer は Mermaid、activation、SourceMap、WebView、Clipboard を扱わない。修飾なし `validate_order()`、chain receiver、computed receiver、動的属性アクセスは `self` とみなさず、既存の Unknown / Unresolved と該当する diagnostic 規則を維持する。
+
+### File Structure Plan Amendment
+
+- `src/analyzers/python/pythonAnalyzer.ts` — `self.method()` を `invocationTarget: 'self'` として出力し、他の receiver と direct call の既存分類を維持する。
+- `src/test/pythonFunctionFlow.test.ts` — `self.method()`、await、nested self call、direct call、dynamic receiver、return / raise / partial result の Python Flow Model と共通 Mermaid 出力を検証する。
+- `src/flow-model/flowNode.ts`、`src/flow-model/index.ts`、`src/renderer/mermaidRenderer.ts`、`src/test/mermaidRenderer.test.ts`、`src/test/visualizationView.test.ts` — **function-flow-visualization 仕様所有**。共通 contract と正規 Mermaid text を提供する。
+
+### Requirements Traceability Amendment
+
+| Requirement | Design response |
+|---|---|
+| 2.2, 2.3, 2.13, 2.14 | Python の自己呼び出しも通常 Call と同じ node / edge の実行順を保ち、await と活性化は共通 Renderer へ委譲する。 |
+| 3.1, 3.3, 3.6 | PythonAnalyzer は Common Flow Model の `FlowInvocationTarget` だけを供給し、Python 専用 Renderer / WebView / Clipboard 分岐を持たない。 |
+| 4.1, 4.2 | `self` と構文上識別できない direct / dynamic receiver を自己呼び出しへ推測せず、既存の Unknown / Unresolved と diagnostic を維持する。 |
+| 5.7 | 共通 Renderer が生成する自己呼び出し Note を含む Mermaid text を表示と Clipboard で同一にする。 |
+| 6.1, 6.4–6.7 | `self` は通常 participant の命名規則から除外し、共通 root を使う。その他の receiver と fallback participant の規則は維持する。 |
+| 7.1, 7.2, 7.3, 7.4, 7.5, 7.6 | `self.method()`、await、participant 非生成、未識別 receiver、表示・コピー一致、terminal / partial 共存を Python fixture で回帰検証する。 |
+
+### Testing Strategy Amendment
+
+- `pythonFunctionFlow.test.ts` で `self.validate_order()` と `await self.validate_order()` が participant を持たず `invocationTarget: 'self'` を出力し、direct `validate_order()` と動的 receiver が自己呼び出しへ誤分類されないことを検証する。
+- 同 test で自己呼び出しの Mermaid 出力に追加 `self` / Unknown participant または自己宛て arrow がなく、root のネスト activation と Note が操作名および await を一度だけ表すことを検証する。
+- nested self call、通常 receiver call、Unknown / Unresolved、return、raise、partial result を含む fixture で、activation の対称性、実行順、SourceMap、caller entry、root return を共通 Renderer 回帰として検証する。
+- Python の View / Clipboard 回帰で、自己呼び出し Note を含む `mermaidText` が描画入力、fallback、Clipboard と byte-for-byte 一致し、Python 専用表示分岐がないことを確認する。

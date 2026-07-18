@@ -1389,3 +1389,91 @@ sequenceDiagram
 - SourceMap と `ProcessNoteDecoration.mermaidLine` が、活性化命令を含む最終 Mermaid テキストの行番号を参照することを検証する。
 - `visualizationView.test.ts` で WebView の `mermaid.render()` が正規 `mermaidText` を直接使用し、Clipboard、詳細表示、fallback の Mermaid テキストと byte-for-byte で一致することを検証する。
 - Python fixture を Renderer / VisualizationView に渡し、TypeScript / JavaScript と同じ活性化・コピー契約を満たし、Python 専用の Renderer / WebView 分岐が存在しないことを検証する。
+
+## 対象関数自身への呼び出しの共通表示
+
+### Boundary Commitments Amendment
+
+**This Spec Owns**
+
+- receiver が対象関数自身であることを静的に識別した Call を、通常の participant 呼び出しと区別する Common Flow Model 契約。
+- `root` / 表示名 `self` の既存ライフライン上で、自己呼び出しをネストした活性化期間と Note として正規 Mermaid テキストへ出力する Renderer 契約。
+- TypeScript / JavaScript の自己 receiver 呼び出し、direct call、Unknown / Unresolved、SourceMap、および表示・コピー一致の共通回帰。
+
+**Out of Boundary**
+
+- 修飾なしの直接関数呼び出し、chain call、computed call、動的 receiver を自己呼び出しとして推測すること。
+- `self` / `this` 用の追加 participant、自己宛て message arrow、実行時の receiver 型または呼び出し先本体の解決。
+- Python 固有の Renderer、WebView、Clipboard 表示分岐。
+
+**Allowed Dependencies**
+
+- `FlowCallNode`、`FlowParticipant`、FlowEdge の実行順、`MermaidRenderer`、`MessageLabelFormatter`、`RenderSourceMapEntry`、VisualizationView、Clipboard。
+- Mermaid sequence diagram の既存 `activate` / `deactivate` と Note 構文。新規依存は追加しない。
+
+**Revalidation Triggers**
+
+- Call の自己呼び出し意味情報、participant の任意性、または Call / Await edge の意味を変更する場合。
+- root の activation stack、Note の SourceMap、正規 Mermaid 行順、または WebView / Clipboard の文字列伝播を変更する場合。
+- `this` / `self` 以外の receiver を自己呼び出しと判定する規則を追加する場合。
+
+### Architecture Decision
+
+`FlowCallNode` は、既存の participant と解決状態に加えて、表示上の宛先を明示する任意の `invocationTarget` を持つ。既存モデルとの後方互換のため未指定値は participant 呼び出しとして扱う。
+
+```typescript
+export type FlowInvocationTarget = 'participant' | 'self';
+
+export interface FlowCallNode extends BaseFlowNode {
+  readonly kind: 'call';
+  readonly calleeName: string;
+  readonly participant?: FlowParticipant;
+  readonly resolution: CallResolution;
+  readonly invocationTarget?: FlowInvocationTarget;
+}
+```
+
+- Analyzer は receiver が対象関数自身だと構文上識別できる場合だけ `invocationTarget: 'self'` を設定する。TypeScript / JavaScript は `this.method()`、Python は `self.method()` を対象とする。
+- `invocationTarget: 'self'` の Call は participant を生成・集約しない。Renderer は既存 root activation を一段ネストし、`Note right of root: <操作名>`、または Await→Call edge の場合は `Note right of root: await <操作名>` を出力してから、その一段だけを停止する。
+- Renderer は Note 行を Call node と、存在する Await→Call edge の SourceMap として登録する。activation 命令と synthetic entry は SourceMap のコードジャンプ対象にしない。
+- participant 呼び出しの既存 message、activation、Unknown / Unresolved、return、throw、partial result の規則は変更しない。direct call は `invocationTarget` を設定せず、既存の fallback 規則を利用する。
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant Root
+    Caller->>Root: invoke
+    activate Root
+    activate Root
+    Note right of Root: await validateOrder
+    deactivate Root
+    deactivate Root
+```
+
+### File Structure Plan Amendment
+
+- `src/flow-model/flowNode.ts` — Call の自己呼び出し表示を明示する言語非依存の `FlowInvocationTarget` と任意フィールドを定義する。
+- `src/flow-model/index.ts` — `FlowInvocationTarget` を公開 contract として再 export する。
+- `src/analyzers/typescript/typescriptAnalyzer.ts` — `this.method()` を自己呼び出しとして Common Flow Model へ変換し、direct / dynamic call の既存分類を維持する。
+- `src/renderer/mermaidRenderer.ts` — 自己呼び出しを participant message ではなく root のネスト activation と Note で描画し、Note の SourceMap を生成する。
+- `src/test/flowModelContract.test.ts` — 自己呼び出し表示 target の公開 contract と後方互換を検証する。
+- `src/test/typescriptFlowExtractor.test.ts` — `this.method()`、await、nested self call、direct call、dynamic call の Flow Model 分類を検証する。
+- `src/test/mermaidRenderer.test.ts` — root activation の対称性、Note、participant 不在、Await label、return / throw / partial result、SourceMap を検証する。
+- `src/test/visualizationView.test.ts` — 自己呼び出し Note を含む正規 Mermaid text が WebView、fallback、Clipboard で一致することを検証する。
+
+### Requirements Traceability Amendment
+
+| Requirement | Summary | Components | Interfaces | Flows |
+|---|---|---|---|---|
+| 16.2–16.6 | 通常 participant と Unknown / Unresolved の既存規則を維持 | FlowParticipant, MermaidRenderer | FlowCallNode | call rendering |
+| 18.1 | 自己呼び出し用の追加 participant を抑止 | FlowCallNode, MermaidRenderer | FlowInvocationTarget | self call rendering |
+| 18.2–18.4 | 通常・await・nested self call を root activation と Note で表現 | TypeScriptAnalyzer, MermaidRenderer | FlowEdge, RenderSourceMapEntry | self call rendering |
+| 18.5 | receiver 未識別呼び出しを自己呼び出しへ昇格させない | TypeScriptAnalyzer, MermaidRenderer | CallResolution | fallback rendering |
+| 18.6–18.7 | SourceMap、表示・コピー、terminal / partial との共存を維持 | MermaidRenderer, VisualizationView | RenderResult | text propagation |
+
+### Testing Strategy Amendment
+
+- `typescriptFlowExtractor.test.ts` で `this.validateOrder()`、`await this.validateOrder()`、入れ子の `this` 呼び出しが `invocationTarget: 'self'` を持ち、修飾なし direct call と dynamic call が持たないことを検証する。
+- `mermaidRenderer.test.ts` で自己呼び出しが追加 participant または自己宛て arrow を出力せず、root の activation 開始・終了が対称で、Note が操作名と await を一度だけ表示することを検証する。
+- 同 Renderer test で Note の SourceMap が Call node と Await→Call edge を参照し、caller entry、return、throw、Unknown / Unresolved、partial result の既存の順序と活性化が維持されることを検証する。
+- `visualizationView.test.ts` で自己呼び出し Note を含む Mermaid text が描画入力、fallback、Clipboard で byte-for-byte 一致することを検証する。
