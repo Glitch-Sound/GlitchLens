@@ -581,3 +581,38 @@
 - direct call を自己呼び出しへ誤分類するリスク — receiver が `this` / `self` と構文上明示された場合だけ target を設定する。
 - nested activation が不均衡になるリスク — Renderer の既存 stack に root を一段だけ push / pop し、終了数の一致をテストする。
 - Note の SourceMap が操作行を指さないリスク — Note の追加行を Call node と Await→Call edge の source map として登録する。
+
+---
+
+## Unknown ライフライン・フォールバック分類の設計調査
+
+### Summary
+
+- 既存 `FlowInvocationTarget` は `self` の activation と Note を言語非依存に表現済みであり、新しい participant 種別は不要である。
+- receiver が不明であることと解析に失敗したことを分離する。前者は self fallback、後者は部分結果に限り Unknown と diagnostic を表示する。
+- `Unresolved` は明示的 external participant が残る操作未解決だけに限定する。
+
+### Design Decisions
+
+#### Decision: 既存の self target を分類結果へ一般化する
+
+- **Alternatives Considered**:
+  1. receiver 不明 Call を従来どおり Unknown / Unresolved participant に置く。
+  2. Renderer が participant 不在を見て self と推測する。
+  3. Analyzer が抽出可能だが明示的 external ではない Call に既存 `invocationTarget: 'self'` を設定する。
+- **Selected Approach**: 3 を採用する。
+- **Rationale**: 言語構文の判断は Analyzer、描画は Flow Model だけを入力とする Renderer という責務境界を維持する。
+- **Trade-offs**: direct / dynamic Call の既存 fixture と cache version を更新する必要がある。実行時の主体は推測しない。
+- **Follow-up**: TypeScript と Python の分類、self Note、Unknown error path、Unresolved external path を同じ回帰群で確認する。
+
+#### Design Synthesis
+
+- **Generalization**: 問題は特定言語の direct call ではなく、Call の「表示上の宛先」と「解析可能性」を分離する言語横断契約である。
+- **Build vs. Adopt**: 既存 Flow Model と Mermaid の activation / Note 構文を使用し、新規ライブラリを導入しない。
+- **Simplification**: participant kind、Renderer fallback 推測、Python 専用表示、完全失敗用の synthetic Flow Model を追加しない。
+
+### Risks & Mitigations
+
+- self fallback が明示的 external receiver を覆うリスク — named participant を構築できる receiver は fallback より優先する。
+- parser error が正常 Call を Unknown に変えるリスク — synthetic Unknown は source range と部分結果の順序を保持できる場合だけ生成する。
+- 古い解析結果が表示されるリスク — 両 Analyzer の version を更新し、cache key を変更する。

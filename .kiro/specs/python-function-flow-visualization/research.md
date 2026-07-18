@@ -122,3 +122,38 @@
 
 - `self` 以外の receiver が自己呼び出しへ誤分類されるリスク — VariableName の完全一致で判定する。
 - Python 固有の renderer 分岐が混入するリスク — PythonAnalyzer は Flow Model を出力するだけとし、共通 Renderer / View test で検出する。
+
+---
+
+## Python の Unknown 例外と self フォールバックの設計調査
+
+### Summary
+
+- PythonAnalyzer は既存の `invocationTarget: 'self'` を出力できるため、Python 用の Flow Model 型や Renderer 分岐を追加する必要はない。
+- `VariableName` direct call、chain、computed / dynamic Call は、抽出可能なら self fallback とする。単一識別子の external receiver は既存 named participant を維持する。
+- `Unknown` は recoverable な Call 解析失敗だけに限定し、全体 failure は既存の failed result と user notification を維持する。
+
+### Design Decisions
+
+#### Decision: Python の抽出可能な非 external Call を self target に統一する
+
+- **Alternatives Considered**:
+  1. direct / dynamic Call を Unknown / Unresolved participant に残す。
+  2. Python 専用 participant kind を追加する。
+  3. PythonAnalyzer が既存 `invocationTarget: 'self'` を設定する。
+- **Selected Approach**: 3 を採用する。
+- **Rationale**: Common Flow Model first、Python Analyzer の責務境界、共通 Renderer / Clipboard の正規 Mermaid text を維持できる。
+- **Trade-offs**: 実行時の外部主体を表現しないため、図の `self` は静的な表示上の fallback であり、型推論の結果ではない。
+- **Follow-up**: direct / chain / computed の participant 不在、named external receiver、Unknown error path、analyzer version を Python fixture で確認する。
+
+#### Design Synthesis
+
+- **Generalization**: Python の構文ごとの問題ではなく、抽出可能性と表示主体を分離する共通 Call contract の適用である。
+- **Build vs. Adopt**: @lezer/python、既存 Flow Model、既存 MermaidRenderer を使用し、新規依存を導入しない。
+- **Simplification**: Python interpreter、型解析、Python 専用 Renderer、全体失敗用の Mermaid model を追加しない。
+
+### Risks & Mitigations
+
+- external receiver を self へ誤分類するリスク — `self` 以外の単一 `VariableName` receiver は named participant を優先する。
+- recoverable error の位置が失われるリスク — Unknown Call は source range を持つ局所 error に限定し、diagnostic と同じ source location を使う。
+- 旧 cache が残るリスク — PythonAnalyzer version を更新し、既存 AnalysisCache key を変更する。

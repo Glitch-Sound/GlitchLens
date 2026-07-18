@@ -617,3 +617,89 @@ PythonAnalyzer は MemberExpression の receiver が単一の `VariableName` で
 - 同 test で自己呼び出しの Mermaid 出力に追加 `self` / Unknown participant または自己宛て arrow がなく、root のネスト activation と Note が操作名および await を一度だけ表すことを検証する。
 - nested self call、通常 receiver call、Unknown / Unresolved、return、raise、partial result を含む fixture で、activation の対称性、実行順、SourceMap、caller entry、root return を共通 Renderer 回帰として検証する。
 - Python の View / Clipboard 回帰で、自己呼び出し Note を含む `mermaidText` が描画入力、fallback、Clipboard と byte-for-byte 一致し、Python 専用表示分岐がないことを確認する。
+
+## Python Call の self フォールバック
+
+この節は、前出の Python mapping と自己呼び出し設計にある「direct / chain / computed / dynamic Call を Unknown / Unresolved participant へ送る」分類記述を置き換える。Python 固有の Renderer を持たず、既存の共通 `FlowInvocationTarget` を利用する方針は維持する。
+
+### Boundary Commitments Amendment
+
+**This Spec Owns**
+
+- PythonAnalyzer が、`self.method()` に限らず、明示的な他クラス・他インスタンス participant を構築できないが抽出可能な Call を、共通 `invocationTarget: 'self'` に変換すること。
+- Python の部分解析で Call の解析結果を生成できない箇所だけを、共通 `Unknown` participant と diagnostic で表現する fixture と回帰。
+- 明示的な単一識別子 receiver の class / instance participant、await / nested call の実行順、共通 Renderer の表示・コピー契約を維持すること。
+
+**Out of Boundary**
+
+- `FlowInvocationTarget`、FlowParticipant kind、MermaidRenderer、WebView、Clipboard の Python 専用拡張。
+- 実行時 binding、モジュール探索、型推論、呼び出し先本文を使った receiver の解決。
+- Flow Model を返せない全体解析失敗を `Unknown` Mermaid 図へ変換すること。
+
+**Allowed Dependencies**
+
+- `PythonAnalyzer`、Python parser adapter、既存 FlowCallNode / FlowDiagnostic contract、共通 Renderer self-call contract、AnalysisCache version、Python / renderer unit tests。
+
+**Revalidation Triggers**
+
+- Python の `VariableName`、`MemberExpression`、computed / chain call の分類、局所 parser error の位置情報、または Python analyzer version を変更する場合。
+- 共通 `invocationTarget`、Unknown participant、activation、SourceMap、表示・コピー Mermaid text を変更する場合。
+
+### Python to Flow Model Mapping Amendment
+
+| Python construct | Flow Model | 表示上の主体 |
+|---|---|---|
+| `call()` | `call`、`invocationTarget: 'self'`、participant なし | `self` の nested activation と Note |
+| `self.method()` | `call`、`invocationTarget: 'self'`、participant なし | `self` の nested activation と Note |
+| `receiver.method()`（receiver が `self` 以外の単一識別子） | `call`、既存 class / instance participant | 明示的 external participant |
+| `factory().run()`、添字アクセス、`getattr(...)`、その他の抽出可能な dynamic Call | `call`、`invocationTarget: 'self'`、participant なし | `self` の nested activation と Note |
+| Call を構成できない recoverable parser error | source range を持つ `call`、`Unknown` participant、`resolution: 'unknown'` | `Unknown` と diagnostic |
+
+PythonAnalyzer は上表の self fallback Call を `resolution: 'resolved'` として出力し、receiver の不明さだけで `unknown-call` / `unresolved-call` diagnostic を加えない。明示的 external participant が得られるが操作解決が不完全な場合だけ `Unresolved` と `unresolved-call` を保持する。全体失敗、cancellation、対象関数未発見は既存 failure result のままとし、Mermaid を生成しない。
+
+```mermaid
+sequenceDiagram
+    participant PythonAnalyzer
+    participant FlowModel
+    participant Renderer
+    PythonAnalyzer->>PythonAnalyzer: classify extracted Call
+    alt single named external receiver
+        PythonAnalyzer->>FlowModel: named participant Call
+    else no explicit external receiver
+        PythonAnalyzer->>FlowModel: self-target Call
+    else recoverable parse error
+        PythonAnalyzer->>FlowModel: Unknown Call + diagnostic
+    end
+    FlowModel->>Renderer: common rendering
+```
+
+### Integration Decision
+
+Python 固有の構文分類は `PythonAnalyzer.callInfo()` に閉じ込める。`VariableName` direct call、dynamic / computed Call、chain receiver は、callee 名を取得できる場合に self target を返す。`receiver.method()` の receiver が `self` 以外の単一 `VariableName` なら、従来どおり先頭大文字を class、それ以外を instance participant とする。Renderer は AST や Python error を見ず、`invocationTarget`、participant、resolution、diagnostic だけを消費する。
+
+分類意味論が変わるため PythonAnalyzer の version を更新する。これにより cache は古い Unknown / Unresolved 図を再利用しない。新規ライブラリや Python interpreter 実行は不要である。
+
+### File Structure Plan Amendment
+
+- `src/analyzers/python/pythonAnalyzer.ts` — `callInfo()` の分類を self fallback へ更新し、recoverable Call parsing error だけを Unknown + diagnostic として表現する。version を更新する。
+- `src/test/pythonFunctionFlow.test.ts` — direct、chain、computed / dynamic、await、nested、明示的 external、partial error の Flow Model / Mermaid 出力を検証する。
+- `src/test/analyzerContract.test.ts`、`src/test/visualizeFunctionFlowUseCase.test.ts` — 全体 failure が Mermaid を生成せず既存 failure notice を返す境界を維持する。
+- `src/test/mermaidRenderer.test.ts`、`src/test/visualizationView.test.ts` — **function-flow-visualization 仕様所有**。Python Flow Model を入力に self Note、Unknown exception、SourceMap、Clipboard 一致を回帰する。
+
+### Requirements Traceability Amendment
+
+| Requirement | Design response |
+|---|---|
+| 2.2, 2.3, 2.13, 2.14 | self fallback を含む Call でも実行順、Await→Call edge、activation を共通 Renderer contract で維持する。 |
+| 3.1–3.6 | PythonAnalyzer は既存 Common Flow Model だけを返し、Python 専用の描画契約を追加しない。 |
+| 4.1–4.5 | recoverable な解析不能 Call だけを Unknown + diagnostic とし、抽出可能な dynamic Call は self fallback、全体失敗は既存 failure result とする。 |
+| 5.1–5.7 | 静的・ローカル解析、cache version 更新、既存言語回帰、共通 Mermaid text のコピー一致を維持する。 |
+| 6.1–6.9 | 単一識別子 external receiver を named participant に保ち、それ以外の抽出可能 Call を self、解析不能 Call を Unknown とする。 |
+| 7.1–7.6 | 明示 self と fallback self の双方を nested activation / Note で表し、await、partial result、表示・コピー一致を検証する。 |
+
+### Testing Strategy Amendment
+
+- `foo()`、`factory().run()`、`items[index]()`、`getattr(...)()` が抽出可能な場合、participant を持たない `invocationTarget: 'self'` として出力され、`Unknown` / `Unresolved` participant を表示しないことを検証する。
+- `service.save()`、`logger.error()`、`Service.build()` は既存の instance / class participant を維持する。明示的 external participant の未解決操作だけは `Unresolved` と diagnostic を表示する。
+- 編集途中の Python fixture で、局所的に Call を構成できない部分だけが `Unknown` participant と diagnostic を持ち、解析可能な隣接 Call と部分結果の順序を維持することを検証する。
+- await / nested self fallback、return / raise、SourceMap、WebView fallback、Clipboard が byte-for-byte 同じ Mermaid text を使用することを検証する。

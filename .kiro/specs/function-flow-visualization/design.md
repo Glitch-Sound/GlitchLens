@@ -1477,3 +1477,86 @@ sequenceDiagram
 - `mermaidRenderer.test.ts` で自己呼び出しが追加 participant または自己宛て arrow を出力せず、root の activation 開始・終了が対称で、Note が操作名と await を一度だけ表示することを検証する。
 - 同 Renderer test で Note の SourceMap が Call node と Await→Call edge を参照し、caller entry、return、throw、Unknown / Unresolved、partial result の既存の順序と活性化が維持されることを検証する。
 - `visualizationView.test.ts` で自己呼び出し Note を含む Mermaid text が描画入力、fallback、Clipboard で byte-for-byte 一致することを検証する。
+
+## Unknown ライフラインの自己インスタンス・フォールバック
+
+この節は、前出の Requirement 16 および Requirement 18 にある「receiver 未識別 Call を Unknown / Unresolved participant へ送る」分類記述を置き換える。`FlowInvocationTarget`、Renderer の自己呼び出し描画、caller / return 契約は維持する。
+
+### Boundary Commitments Amendment
+
+**This Spec Owns**
+
+- 全言語 Analyzer が、明示的に他のクラスまたはインスタンスへの呼び出しと判断できないが Call を抽出できる場合に、共通 `FlowCallNode.invocationTarget: 'self'` を設定する分類契約。
+- 構文エラー、parser エラー、または同等の解析不能な箇所を部分結果として表現できる場合だけ、`Unknown` participant と diagnostic を用いる共通契約。
+- `self` のネスト activation、Note、SourceMap、表示・コピー Mermaid text 一致、および既知の外部主体に対する `Unresolved` 表示の回帰。
+
+**Out of Boundary**
+
+- 実行時の型、binding、動的 dispatch、または呼び出し先本体を解析して他インスタンスかどうかを解決すること。
+- Flow Model 全体を返せない解析失敗に対して架空の Call または `Unknown` ライフラインを生成すること。
+- Python 固有の Renderer、WebView、Clipboard 分岐。
+
+**Allowed Dependencies**
+
+- `FlowCallNode` の既存 `invocationTarget` / `participant` / `resolution`、`FlowDiagnostic`、TypeScript / Python Analyzer、`MermaidRenderer`、既存の cache version、unit test fixtures。
+- 新しい runtime dependency は追加しない。
+
+**Revalidation Triggers**
+
+- Call の receiver 分類、`FlowInvocationTarget`、fallback participant、diagnostic kind、または analyzer version を変更する場合。
+- self activation、Note の SourceMap、正規 Mermaid text、WebView、Clipboard の伝播を変更する場合。
+
+### Architecture Decision
+
+既存の `FlowInvocationTarget` を表示宛先の唯一の契約として再利用する。`participant` を持たず `invocationTarget: 'self'` を持つ Call は、receiver を構文上 `this` / `self` と識別できた場合だけでなく、解析が成功し、明示的な他インスタンス participant を構築できない場合にも用いる。Renderer は言語や失敗理由を再判定せず、この契約だけから既存 root (`self`) のネスト activation と Note を描画する。
+
+| Call 分類 | FlowCallNode | Mermaid 表現 | Diagnostic |
+|---|---|---|---|
+| `this` / `self`、または他インスタンスと明示判定できない抽出可能 Call | `invocationTarget: 'self'`、participant なし、`resolution: 'resolved'` | `self` のネスト activation と操作名 Note | 追加しない |
+| 単一識別子などから明示的な他クラス・他インスタンスを構築できる Call | 既存 named participant | participant message と activation | 必要な既存診断のみ |
+| 他主体は分かるが操作解決が不完全 | 明示的 participant と `resolution: 'unresolved'` | `Unresolved` 表示を含む既存 participant flow | `unresolved-call` |
+| Call 結果を生成できないが部分結果を継続できる解析エラー | `Unknown` participant と `resolution: 'unknown'` を持つ表現可能な synthetic Call | `Unknown` participant と diagnostic | `unknown-call` / partial-analysis |
+| Flow Model 自体を返せない失敗 | Call を生成しない | 既存 failure notification | `analysis-failed` |
+
+Analyzer は Call が抽出可能な限り callee 名と実行順を保持する。receiver 不明は `Unknown` の理由ではない。synthetic `Unknown` は parser が source range を保ち、部分結果の順序へ安全に置ける場合にだけ生成する。`Unresolved` は明示的な他主体をすでに持つ Call の操作未解決に限定する。各 Analyzer は分類意味論の変更時に version を更新し、旧分類のキャッシュを再利用しない。
+
+```mermaid
+sequenceDiagram
+    participant Analyzer
+    participant FlowModel
+    participant Renderer
+    Analyzer->>Analyzer: extract Call
+    alt explicit external participant
+        Analyzer->>FlowModel: participant Call
+    else extractable but no explicit external participant
+        Analyzer->>FlowModel: self-target Call
+    else partial parse error
+        Analyzer->>FlowModel: Unknown Call + diagnostic
+    end
+    FlowModel->>Renderer: render
+```
+
+### File Structure Plan Amendment
+
+- `src/analyzers/typescript/typescriptAnalyzer.ts` — Call receiver の分類を `self` fallback 契約へ変更し、解析エラー時だけ Unknown Call を生成する。analyzer version を更新する。
+- `src/analyzers/python/pythonAnalyzer.ts` — 同じ分類契約を Python AST へ適用し、analyzer version を更新する。Python 固有の描画を追加しない。
+- `src/renderer/mermaidRenderer.ts` — 既存 `invocationTarget: 'self'` の描画を分類結果に対して維持し、Unknown が error-path Call に限られることを回帰可能にする。
+- `src/flow-model/flowNode.ts`、`src/flow-model/flowParticipant.ts` — 既存 contract を維持する。新しい participant kind や言語別 field は追加しない。
+- `src/test/typescriptFlowExtractor.test.ts`、`src/test/pythonFunctionFlow.test.ts` — direct、computed、chain、await、明示的 external、partial parse error の Call 分類と diagnostic を検証する。
+- `src/test/mermaidRenderer.test.ts`、`src/test/flowModelContract.test.ts`、`src/test/visualizationView.test.ts` — self Note / activation、Unknown error path、Unresolved external path、SourceMap、Clipboard 一致を検証する。
+
+### Requirements Traceability Amendment
+
+| Requirement | Summary | Components | Interfaces | Flows |
+|---|---|---|---|---|
+| 6.1, 6.3–6.5 | 解析不能箇所だけを Unknown として部分結果へ残す | Analyzers, FlowModel, MermaidRenderer | FlowDiagnostic, FlowCallNode | partial analysis |
+| 6.2 | 明示的外部主体の未解決操作だけを Unresolved とする | Analyzers, MermaidRenderer | CallResolution | external unresolved |
+| 16.2–16.9 | named participant、self fallback、Unknown exception、正規 Mermaid text を維持する | Analyzers, MermaidRenderer, VisualizationView | FlowInvocationTarget, RenderResult | call rendering |
+| 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7 | self fallback を nested activation / Note として描画し、await・入れ子・部分結果と共存させる | Analyzers, MermaidRenderer | FlowEdge, RenderSourceMapEntry | self call rendering |
+
+### Testing Strategy Amendment
+
+- TypeScript と Python の修飾なし direct Call、computed / chain Call、dynamic callable が `invocationTarget: 'self'`、participant なし、resolved として出力されることを検証する。
+- 単一識別子の明示的 external receiver は named participant のままとし、既知 external の操作未解決だけが `Unresolved` を表示することを検証する。
+- 構文エラーを含む partial fixture で、表現可能な解析不能 Call だけが `Unknown` participant と diagnostic を持ち、正常な receiver 不明 Call が `Unknown` を作らないことを検証する。
+- self fallback を含む await、nested Call、return、throw、SourceMap、WebView fallback、Clipboard が同一 Mermaid text を使うことを検証する。
