@@ -211,14 +211,15 @@ suite('VisualizationView', () => {
 		assert.ok(!webviewSource.match(/\b[a-zA-Z]+:\s*['"]currentColor['"]/));
 		assert.ok(!webviewSource.match(/\b[a-zA-Z]+:\s*['"]var\(--vscode-/));
 		assert.ok(webviewSource.includes('mermaid.render'));
-		assert.ok(webviewSource.includes('buildMermaidRenderText(mermaidText)'));
+		assert.ok(webviewSource.includes("mermaid.render('glitchlens-mermaid-diagram', mermaidText)"));
+		assert.ok(!webviewSource.includes('buildMermaidRenderText'));
 		assert.ok(webviewSource.includes('centerParticipantLabels(diagram)'));
 		assert.ok(webviewSource.includes("querySelectorAll('svg text.actor.actor-box, svg g.actor text, svg g.actor-top text, svg g.actor-bottom text')"));
 		assert.ok(webviewSource.includes("setAttribute('text-anchor', 'middle')"));
 		assert.ok(webviewSource.includes("setAttribute('dominant-baseline', 'middle')"));
 		assert.ok(webviewSource.includes("setAttribute('alignment-baseline', 'middle')"));
 		assert.ok(webviewSource.includes("style.setProperty('text-anchor', 'middle')"));
-		assert.ok(webviewSource.includes('readRootParticipantId(lines)'));
+		assert.ok(!webviewSource.includes('readRootParticipantId'));
 		assert.ok(webviewSource.includes('shape.classList.add(className)'));
 		assert.ok(webviewSource.includes('text.classList.add(className)'));
 		assert.ok(webviewSource.includes("shape.setAttribute('stroke', color)"));
@@ -231,13 +232,8 @@ suite('VisualizationView', () => {
 		assert.ok(!webviewSource.includes('styleControlLabel(text, className, color)'));
 		assert.ok(!webviewSource.includes('CONTROL_LABEL_BOX_EXTRA_WIDTH'));
 		assert.ok(webviewSource.includes("shape.setAttribute('stroke-dasharray', 'none')"));
-		assert.ok(webviewSource.includes('activate ${rootParticipantId}'));
-		assert.ok(webviewSource.includes('deactivate ${rootParticipantId}'));
-		assert.ok(webviewSource.includes('activate ${message.to}'));
-		assert.ok(webviewSource.includes('deactivate ${message.to}'));
-		assert.ok(webviewSource.includes('deactivate ${message.from}'));
-		assert.ok(webviewSource.includes('if (message.to === rootParticipantId)'));
-		assert.ok(webviewSource.includes('parseSequenceMessage'));
+		assert.ok(!webviewSource.includes('activate ${rootParticipantId}'));
+		assert.ok(!webviewSource.includes('parseSequenceMessage'));
 		assert.ok(!webviewSource.includes('relaxSvgTextLayout'));
 		assert.ok(!webviewSource.includes("removeAttribute('textLength')"));
 		assert.ok(!webviewSource.includes("removeAttribute('lengthAdjust')"));
@@ -411,8 +407,7 @@ suite('VisualizationView', () => {
 		assert.ok(viewSource.includes('#diagram svg text.loopText[class*="glitchlens-control-"]'));
 		assert.ok(!webviewSource.includes("text.style.setProperty('fill', color, 'important')"));
 		assert.ok(!webviewSource.includes("shape.style.setProperty('stroke', color, 'important')"));
-		assert.ok(webviewSource.includes('activate ${rootParticipantId}'));
-		assert.ok(webviewSource.includes('activate ${message.to}'));
+		assert.ok(webviewSource.includes("mermaid.render('glitchlens-mermaid-diagram', mermaidText)"));
 		assert.ok(webviewSource.includes('mermaid.render'));
 		assert.ok(webviewSource.includes('showFallback(diagram, mermaidText)'));
 		assert.ok(viewSource.includes('readWebviewMermaidScript'));
@@ -528,22 +523,24 @@ suite('VisualizationView', () => {
 		const clipboard = new StubClipboard();
 		const notifications = new StubNotification();
 		const adapter = new WebviewVisualizationAdapter(factory, clipboard, notifications);
-		await adapter.show(createVisualizationViewModel(successResult('success', { mermaidText: 'sequenceDiagram\nparticipant root as self\nroot->>load: success\n' })));
+		const successMermaid = 'sequenceDiagram\nparticipant root as self\nactivate root\nroot->>load: success\nactivate load\ndeactivate load\ndeactivate root\n';
+		await adapter.show(createVisualizationViewModel(successResult('success', { mermaidText: successMermaid })));
 		assert.ok(factory.panel.webview.html.includes('participant root as self'));
 
 		factory.panel.emitMessage({ type: 'copyMermaid', viewId: factory.panel.currentViewId(), text: 'attacker supplied text' });
 
 		await clipboard.flush();
-		assert.deepStrictEqual(clipboard.writes, ['sequenceDiagram\nparticipant root as self\nroot->>load: success\n']);
+		assert.deepStrictEqual(clipboard.writes, [successMermaid]);
 		assert.deepStrictEqual(notifications.messages, ['info:Mermaid text copied.']);
 
-		await adapter.show(createVisualizationViewModel(successResult('partial', { mermaidText: 'sequenceDiagram\nparticipant root as self\nroot->>load: partial\n' })));
+		const partialMermaid = 'sequenceDiagram\nparticipant root as self\nactivate root\nroot->>load: partial\ndeactivate root\n';
+		await adapter.show(createVisualizationViewModel(successResult('partial', { mermaidText: partialMermaid })));
 		factory.panel.emitMessage({ type: 'copyMermaid', viewId: factory.panel.currentViewId() });
 
 		await clipboard.flush();
 		assert.deepStrictEqual(clipboard.writes, [
-			'sequenceDiagram\nparticipant root as self\nroot->>load: success\n',
-			'sequenceDiagram\nparticipant root as self\nroot->>load: partial\n',
+			successMermaid,
+			partialMermaid,
 		]);
 	});
 

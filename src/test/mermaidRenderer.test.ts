@@ -28,6 +28,37 @@ suite('MermaidRenderer', () => {
 		assert.deepStrictEqual(result.warnings, []);
 	});
 
+	test('emits canonical participant activations for calls and terminal returns', () => {
+		const result = new MermaidRenderer().render(createModel());
+		const lines = result.mermaidText.trimEnd().split('\n');
+		const activationStart = lines.indexOf('activate root');
+		assert.ok(activationStart >= 0);
+		assert.deepStrictEqual(lines.slice(activationStart), [
+			'activate root',
+			'root->>fetchUser: fetchUser',
+			'activate fetchUser',
+			'deactivate fetchUser',
+			'root->>saveUser: await saveUser',
+			'activate saveUser',
+			'saveUser-->>root: return user',
+			'deactivate saveUser',
+			'deactivate root',
+		]);
+		assert.strictEqual(lines.filter(line => line === 'activate root').length, 1);
+	});
+
+	test('keeps a call activation open for a terminal reached by a next edge', () => {
+		const result = new MermaidRenderer().render(createModel({
+			edges: [
+				edge('edge:fetch', 'node:fetch', 1),
+				edge('edge:return', 'node:return', 2, 'next', 'node:fetch'),
+			],
+		}));
+		const text = result.mermaidText;
+		assert.ok(text.indexOf('activate fetchUser') < text.indexOf('fetchUser-->>root: return user'));
+		assert.ok(text.indexOf('fetchUser-->>root: return user') < text.indexOf('deactivate fetchUser'));
+	});
+
 	test('represents unknown and unresolved calls without forcing resolution', () => {
 		const model = createModel({
 			nodes: [

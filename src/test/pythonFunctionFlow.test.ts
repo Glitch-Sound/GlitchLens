@@ -205,6 +205,12 @@ suite('Python function flow', () => {
 		assert.ok(result.mermaidText.includes('root->>Unresolved: run (unresolved)'));
 		assert.ok(result.mermaidText.includes('await save'));
 		assert.ok(result.mermaidText.includes('return build_result(...)'));
+		assert.ok(result.mermaidText.includes('activate root'));
+		assert.ok(result.mermaidText.includes('deactivate root'));
+		const serviceActivations = (result.mermaidText.match(/^activate service$/gm) ?? []).length;
+		const serviceDeactivations = (result.mermaidText.match(/^deactivate service$/gm) ?? []).length;
+		assert.ok(serviceActivations > 0);
+		assert.strictEqual(serviceActivations, serviceDeactivations);
 		assert.ok(result.sourceMap.length > 0);
 		assert.ok(result.sourceMap.every(entry => entry.sourceLocation.uri === source.uri));
 

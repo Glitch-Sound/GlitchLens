@@ -58,6 +58,7 @@ class RenderContext {
 	private readonly warnings: RendererWarning[] = [];
 	private readonly sourceMap: RenderSourceMapEntry[] = [];
 	private readonly processNoteDecorations: ProcessNoteDecoration[] = [];
+	private readonly activeParticipants: string[] = [];
 	private nextWarning = 0;
 
 	public constructor(private readonly model: FlowModel) {}
@@ -66,10 +67,13 @@ class RenderContext {
 		this.addParticipant('root', 'self');
 		this.prepareParticipants();
 		this.renderParticipants();
+		this.activateParticipant('root');
 		this.renderEntryCall();
 		this.renderEdges();
 		this.renderDiagnostics();
 		this.warnUnsupportedNodes();
+		this.deactivateAllParticipants();
+		this.deactivateParticipant('root');
 
 		return {
 			mermaidText: `${this.lines.join('\n')}\n`,
@@ -152,6 +156,7 @@ class RenderContext {
 		if (target.kind === 'throw') {
 			this.markRendered(target, edge);
 			this.renderNote(formatMessageLabel({ kind: 'throw', expression: target.expression }), target, edge);
+			this.deactivateForNode(edge.sourceNodeId);
 			return;
 		}
 		if (target.kind === 'break') {
@@ -361,6 +366,10 @@ class RenderContext {
 			const noteLine = this.addLine(`Note over root,${participantId}: ${note}`);
 			this.addSourceMap(node.sourceLocation, node.id, edge?.id, noteLine);
 		}
+		this.activateParticipant(participantId);
+		if (!this.hasTerminalContinuation(node.id)) {
+			this.deactivateParticipant(participantId);
+		}
 	}
 
 	private renderReturn(node: Extract<FlowNode, { kind: 'return' }>, edge: FlowEdge): void {
@@ -368,6 +377,7 @@ class RenderContext {
 		const message = formatMessageLabel({ kind: 'return', expression: node.expression });
 		const line = this.addLine(`${sourceParticipant}-->>root: ${escapeText(message)}`);
 		this.addSourceMap(node.sourceLocation, node.id, edge.id, line);
+		this.deactivateForNode(edge.sourceNodeId);
 	}
 
 	private renderNote(message: string, node: FlowNode, edge: FlowEdge): void {
@@ -412,6 +422,40 @@ class RenderContext {
 		if (!this.participants.has(id)) {
 			this.participants.set(id, { id, label });
 		}
+	}
+
+	private activateParticipant(participantId: string): void {
+		this.addLine(`activate ${participantId}`);
+		this.activeParticipants.push(participantId);
+	}
+
+	private deactivateParticipant(participantId: string): void {
+		const index = this.activeParticipants.lastIndexOf(participantId);
+		if (index < 0) {
+			return;
+		}
+		this.activeParticipants.splice(index, 1);
+		this.addLine(`deactivate ${participantId}`);
+	}
+
+	private deactivateForNode(nodeId: string): void {
+		const participantId = this.nodeParticipants.get(nodeId);
+		if (participantId) {
+			this.deactivateParticipant(participantId);
+		}
+	}
+
+	private deactivateAllParticipants(): void {
+		for (const participantId of [...this.activeParticipants].reverse()) {
+			this.deactivateParticipant(participantId);
+		}
+	}
+
+	private hasTerminalContinuation(nodeId: string): boolean {
+		return this.outgoingEdges(nodeId, ['next', 'return', 'throw', 'uncertain']).some(edge => {
+			const target = this.nodeById(edge.targetNodeId);
+			return target?.kind === 'return' || target?.kind === 'throw';
+		});
 	}
 
 	private addLine(line: string): number {

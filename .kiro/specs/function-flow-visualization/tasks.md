@@ -624,3 +624,29 @@
   - _Depends: 24.1_
   - _Boundary: MermaidRenderer tests, VisualizationView, ClipboardAdapter, Integration validation_
   - _Requirements: 16.1, 16.6, 16.7_
+
+- [x] 25. Mermaid 活性化を正規 Mermaid 出力へ統合する
+
+- [x] 25.1 Renderer が活性化を含む正規 Mermaid テキストを生成する
+  - root の開始・終了、および Call / Await / Return / Throw の静的な順序に対応する participant の開始・終了を、Mermaid の正規テキストへ出力する。
+  - 活性化命令を含む行順を SourceMap、process note の行番号、unknown / unresolved、partial result、既存 warning と同じ Renderer 出力として扱う。
+  - Observable completion: Call、Await、Return、Throw、入れ子 Call を含む Renderer fixture が、`activate` / `deactivate` を含む Mermaid テキストと正しい SourceMap・process note 行番号を返す。
+  - _Boundary: MermaidRenderer / RenderContext_
+  - _Requirements: 4.1, 4.3, 4.5, 9.18_
+
+- [x] 25.2 WebView と Clipboard を正規 Mermaid テキストへ統一する
+  - WebView の Mermaid 構造後処理を除去し、Renderer 由来の Mermaid テキストを変更せずに描画する。
+  - 詳細表示、fallback、Clipboard が活性化命令を含む同一文字列を利用し、既存の SVG テーマ・participant・await・return・control・process note 装飾を維持する。
+  - Observable completion: WebView の描画入力、表示される Mermaid テキスト、Clipboard の内容が byte-for-byte で一致し、二重の活性化命令が発生しない。
+  - _Depends: 25.1_
+  - _Boundary: WebView Mermaid renderer, VisualizationView, ClipboardAdapter_
+  - _Requirements: 4.2, 4.4, 5.1, 5.2, 5.3, 9.11, 9.18, 9.19_
+
+- [x] 25.3 活性化の言語横断回帰と品質ゲートを実施する
+  - TypeScript / JavaScript の Call、Await、Return、Throw、入れ子 Call、loop / branch / try-catch、unknown / unresolved、partial result で、活性化が処理順・participant・メッセージ・notice を変えないことを検証する。
+  - Python Flow Model を共通 Renderer / WebView に渡し、Python 専用の活性化・描画・コピー分岐が不要であることを検証する。
+  - `npm run check-types`、`npm run lint`、`npm run test:unit`、`npm run compile`、`npm run test:integration` を実行する。
+  - Observable completion: 活性化を含む正規 Mermaid、表示、Clipboard、SourceMap、process note、fallback の契約が全対応言語の回帰テストと品質ゲートで確認できる。
+  - _Depends: 25.1, 25.2_
+  - _Boundary: Renderer tests, VisualizationView tests, Python flow regression, Integration validation_
+  - _Requirements: 4.1, 4.2, 4.3, 4.5, 5.1, 5.2, 5.3, 9.11, 9.18, 9.19_
