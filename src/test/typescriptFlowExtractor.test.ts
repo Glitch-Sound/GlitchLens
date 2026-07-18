@@ -14,10 +14,10 @@ suite('TypeScriptAnalyzer static flow extraction', () => {
 		assert.deepStrictEqual(result.model.edges.map(edge => edge.executionOrder), result.model.edges.map((_, index) => index));
 	});
 
-	test('assigns class and instance participants and separates Array and fallback calls', async () => {
-		const result = await analyze(`function target(service, items, value) { service.load(); items.map(value); value?.run(); unknown[value](); }`, 'typescript', 30);
-		assert.ok(result.status === 'success' || result.status === 'partial');
-		if (result.status !== 'success' && result.status !== 'partial') {return;}
+	test('assigns named participants only to explicit external receivers and keeps ambiguous calls self-targeted', async () => {
+		const result = await analyze(`function target(service, items, value) { service.load(); items.map(value); value.run(); unknown[value](); }`, 'typescript', 30);
+		assert.strictEqual(result.status, 'success');
+		if (result.status !== 'success') {return;}
 		const calls = result.model.nodes.filter(node => node.kind === 'call');
 		const load = calls.find(node => node.calleeName === 'load');
 		const map = calls.find(node => node.calleeName === 'map');
@@ -25,16 +25,17 @@ suite('TypeScriptAnalyzer static flow extraction', () => {
 		const computed = calls.find(node => node.calleeName === '<unknown>');
 		assert.deepStrictEqual(load?.participant, { key: 'instance:service', label: 'service', kind: 'instance' });
 		assert.deepStrictEqual(map?.participant, { key: 'class:Array', label: 'Array', kind: 'class' });
-		assert.strictEqual(run?.resolution, 'unresolved');
-		assert.strictEqual(run?.participant?.key, 'unresolved');
-		assert.strictEqual(computed?.resolution, 'unknown');
-		assert.strictEqual(computed?.participant?.key, 'unknown');
+		assert.deepStrictEqual(run?.participant, { key: 'instance:value', label: 'value', kind: 'instance' });
+		assert.strictEqual(run?.invocationTarget, undefined);
+		assert.strictEqual(computed?.invocationTarget, 'self');
+		assert.strictEqual(computed?.participant, undefined);
+		assert.strictEqual(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unknown-call' || diagnostic.kind === 'unresolved-call'), false);
 	});
 
-	test('classifies explicit this calls as self invocations without changing direct or dynamic fallbacks', async () => {
+	test('classifies this, direct, computed, and chain calls as self invocations', async () => {
 		const result = await analyze(`class Service { async target() { this.validate(); await this.save(); validateOrder(); factory().run(); } }`, 'typescript', 45);
-		assert.ok(result.status === 'success' || result.status === 'partial');
-		if (result.status !== 'success' && result.status !== 'partial') { return; }
+		assert.strictEqual(result.status, 'success');
+		if (result.status !== 'success') { return; }
 		const calls = result.model.nodes.filter(node => node.kind === 'call');
 		const validate = calls.find(node => node.calleeName === 'validate');
 		const save = calls.find(node => node.calleeName === 'save');
@@ -44,10 +45,10 @@ suite('TypeScriptAnalyzer static flow extraction', () => {
 		assert.strictEqual(save?.invocationTarget, 'self');
 		assert.strictEqual(validate?.participant, undefined);
 		assert.strictEqual(save?.participant, undefined);
-		assert.strictEqual(direct?.invocationTarget, undefined);
-		assert.strictEqual(direct?.participant?.key, 'unknown');
-		assert.strictEqual(dynamic?.invocationTarget, undefined);
-		assert.strictEqual(dynamic?.resolution, 'unresolved');
+		assert.strictEqual(direct?.invocationTarget, 'self');
+		assert.strictEqual(direct?.participant, undefined);
+		assert.strictEqual(dynamic?.invocationTarget, 'self');
+		assert.strictEqual(dynamic?.participant, undefined);
 	});
 
 	test('extracts await calls, branches, loops, returns, throws, and try/catch/finally', async () => {
@@ -311,26 +312,27 @@ suite('TypeScriptAnalyzer static flow extraction', () => {
 });
 
 suite('TypeScriptAnalyzer unresolved partial and cancellation handling', () => {
-	test('marks unknown calls when the callable target cannot be named', async () => {
+	test('keeps computed callable targets on self without creating Unknown', async () => {
 		const result = await analyze(`function target(callbacks, index) { callbacks[index](); }`, 'javascript', 20);
-		assert.strictEqual(result.status, 'partial');
-		if (result.status !== 'partial') {return;}
+		assert.strictEqual(result.status, 'success');
+		if (result.status !== 'success') {return;}
 		const call = result.model.nodes.find(node => node.kind === 'call');
 		assert.ok(call);
-		assert.strictEqual(call.resolution, 'unknown');
-		assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unknown-call' && diagnostic.nodeId === call.id && diagnostic.sourceLocation));
-		assert.strictEqual(result.model.completeness, 'partial');
-		assert.strictEqual(result.model.metadata.completeness, 'partial');
+		assert.strictEqual(call.invocationTarget, 'self');
+		assert.strictEqual(call.participant, undefined);
+		assert.strictEqual(call.resolution, 'resolved');
+		assert.strictEqual(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unknown-call'), false);
+		assert.strictEqual(result.model.completeness, 'complete');
+		assert.strictEqual(result.model.metadata.completeness, 'complete');
 	});
 
-	test('marks unresolved calls when a named member is reached through a dynamic receiver', async () => {
+	test('keeps dynamically chained members on self instead of marking them unresolved', async () => {
 		const result = await analyze(`function target(serviceMap, type, factory, name) { serviceMap[type].execute(); factory.getService(name).run(); }`, 'typescript', 20);
-		assert.strictEqual(result.status, 'partial');
-		if (result.status !== 'partial') {return;}
-		const unresolved = result.model.nodes.flatMap(node => node.kind === 'call' && node.resolution === 'unresolved' ? [node.calleeName] : []);
-		assert.ok(unresolved.includes('execute'));
-		assert.ok(unresolved.includes('run'));
-		assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call' && diagnostic.sourceLocation));
+		assert.strictEqual(result.status, 'success');
+		if (result.status !== 'success') {return;}
+		const calls = result.model.nodes.filter((node): node is Extract<typeof node, { kind: 'call' }> => node.kind === 'call');
+		assert.ok(calls.filter(call => ['execute', 'run'].includes(call.calleeName)).every(call => call.invocationTarget === 'self' && call.participant === undefined && call.resolution === 'resolved'));
+		assert.strictEqual(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call'), false);
 	});
 
 	test('keeps collection methods resolved after a call expression receiver', async () => {
@@ -343,15 +345,18 @@ suite('TypeScriptAnalyzer unresolved partial and cancellation handling', () => {
 		assert.ok(!result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call' && diagnostic.nodeId === mapCall.id));
 	});
 
-	test('marks computed property and optional chaining calls as unresolved or unknown without forcing full resolution', async () => {
+	test('keeps ambiguous optional calls on self while reporting named optional external receivers as unresolved', async () => {
 		const result = await analyze(`function target(obj, key, maybe) { obj[key](); maybe?.(); obj?.run(); }`, 'javascript', 20);
 		assert.strictEqual(result.status, 'partial');
 		if (result.status !== 'partial') {return;}
 		const calls = result.model.nodes.filter(node => node.kind === 'call');
-		assert.ok(calls.some(node => node.resolution === 'unknown'));
-		assert.ok(calls.some(node => node.calleeName === 'run' && node.resolution === 'unresolved'));
-		assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unknown-call'));
-		assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call'));
+		assert.ok(calls.filter(node => node.calleeName === '<unknown>').every(node => node.invocationTarget === 'self' && node.participant === undefined));
+		const run = calls.find(node => node.calleeName === 'run');
+		assert.deepStrictEqual(run?.participant, { key: 'instance:obj', label: 'obj', kind: 'instance' });
+		assert.strictEqual(run?.invocationTarget, undefined);
+		assert.strictEqual(run?.resolution, 'unresolved');
+		assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call' && diagnostic.nodeId === run?.id));
+		assert.strictEqual(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unknown-call'), false);
 	});
 
 	test('returns partial results with diagnostics when one statement is unsupported', async () => {
@@ -361,6 +366,31 @@ suite('TypeScriptAnalyzer unresolved partial and cancellation handling', () => {
 		assert.deepStrictEqual(result.model.nodes.filter(node => node.kind === 'call').map(node => node.calleeName), ['before', 'after']);
 		assert.strictEqual(result.completeness, 'partial');
 		assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unsupported-syntax' && diagnostic.sourceLocation));
+	});
+
+	test('represents a safely ordered recoverable parse error as an Unknown call', async () => {
+		const result = await analyze(`function target() { before(); @ }`, 'javascript', 20);
+		assert.strictEqual(result.status, 'partial');
+		if (result.status !== 'partial') {return;}
+		const calls = result.model.nodes.filter((node): node is Extract<typeof node, { kind: 'call' }> => node.kind === 'call');
+		const unknown = calls.find(node => node.resolution === 'unknown');
+		assert.deepStrictEqual(calls.map(node => node.calleeName), ['before', '<unknown>']);
+		assert.deepStrictEqual(unknown?.participant, { key: 'unknown', label: 'Unknown', kind: 'unknown' });
+		assert.ok(unknown?.sourceLocation);
+		assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unknown-call' && diagnostic.nodeId === unknown?.id && diagnostic.sourceLocation));
+	});
+
+	test('integrates leading and middle recoverable parser errors in source order', async () => {
+		const leading = await analyze(`function target() { @; before(); }`, 'javascript', 20);
+		const middle = await analyze(`function target() { before(); @; after(); }`, 'javascript', 20);
+		for (const result of [leading, middle]) {
+			assert.strictEqual(result.status, 'partial');
+			if (result.status !== 'partial') {continue;}
+			assert.strictEqual(result.model.nodes.filter(node => node.kind === 'call').filter(node => node.resolution === 'unknown').length, 1);
+			assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unknown-call'));
+		}
+		if (leading.status === 'partial') {assert.deepStrictEqual(leading.model.nodes.filter(node => node.kind === 'call').map(node => node.calleeName), ['<unknown>', 'before']);}
+		if (middle.status === 'partial') {assert.deepStrictEqual(middle.model.nodes.filter(node => node.kind === 'call').map(node => node.calleeName), ['before', '<unknown>', 'after']);}
 	});
 
 	test('distinguishes fatal errors from recoverable partial analysis', async () => {
@@ -392,15 +422,15 @@ suite('TypeScriptAnalyzer unresolved partial and cancellation handling', () => {
 		assert.strictEqual(result.completeness, 'failed');
 	});
 
-	test('keeps diagnostic kind message and source location for unresolved calls', async () => {
-		const result = await analyze(`function target(factory, name) { factory.getService(name).run(); }`, 'typescript', 20);
+	test('keeps diagnostic kind message and source location for explicitly external unresolved calls', async () => {
+		const result = await analyze(`function target(service) { service?.run(); }`, 'typescript', 20);
 		assert.strictEqual(result.status, 'partial');
 		if (result.status !== 'partial') {return;}
 		const diagnostic = result.model.diagnostics.find(item => item.kind === 'unresolved-call');
 
 		assert.ok(diagnostic);
 		assert.strictEqual(diagnostic.severity, 'warning');
-		assert.ok(diagnostic.message.includes('dynamic receiver'));
+		assert.ok(diagnostic.message.includes('Optional external call'));
 		assert.ok(diagnostic.sourceLocation);
 		assert.strictEqual(diagnostic.sourceLocation.uri, 'file:///workspace/source.ts');
 		assert.ok(typeof diagnostic.sourceLocation.range.start.line === 'number');
@@ -432,7 +462,7 @@ suite('TypeScriptAnalyzer unresolved partial and cancellation handling', () => {
 });
 
 suite('TypeScriptAnalyzer responsiveness validation', () => {
-	test('returns complete or partial results for a large complex function with user-visible unresolved locations', async () => {
+	test('returns complete or partial results for a large complex function with user-visible partial-analysis locations', async () => {
 		const result = await analyze(largeComplexFunction(), 'typescript', 30);
 
 		assert.ok(result.status === 'success' || result.status === 'partial');
@@ -445,7 +475,7 @@ suite('TypeScriptAnalyzer responsiveness validation', () => {
 		assert.ok(!result.model.nodes.some(node => node.kind === 'call' && node.calleeName === 'calleeInternal'));
 		assert.strictEqual(result.model.source.documentVersion, 1);
 		assert.deepStrictEqual(result.model.nodes.map(node => node.order), result.model.nodes.map((_, index) => index));
-		assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call' && diagnostic.sourceLocation));
+		assert.strictEqual(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unresolved-call'), false);
 		assert.ok(result.model.diagnostics.some(diagnostic => diagnostic.kind === 'unsupported-syntax' && diagnostic.sourceLocation));
 	});
 

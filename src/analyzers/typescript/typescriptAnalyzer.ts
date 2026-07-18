@@ -6,7 +6,7 @@ import { fallbackParticipant, namedParticipant, type FlowDiagnostic, type FlowEd
 
 export class TypeScriptAnalyzer implements LanguageAnalyzer {
 	public readonly id = 'typescript';
-	public readonly version = '0.6.0';
+	public readonly version = '0.7.0';
 	public readonly languageIds = ['typescript', 'javascript', 'typescriptreact', 'javascriptreact'] as const;
 
 	public async analyze(input: AnalyzerInput): Promise<AnalyzerResult> {
@@ -31,7 +31,9 @@ export class TypeScriptAnalyzer implements LanguageAnalyzer {
 			}
 
 			const builder = new FlowBuilder(input, sourceFile, candidate);
+			builder.setRecoverableParseDiagnostics(parseDiagnosticsFor(sourceFile));
 			await builder.extractBody(node.body);
+			builder.addRecoverableParseErrorsBefore(node.body.end + 1);
 			const model = builder.model();
 			const completeness = model.completeness === 'partial' ? 'partial' : 'complete';
 			return { status: completeness === 'partial' ? 'partial' : 'success', completeness, diagnostics: builder.diagnostics, model };
@@ -52,6 +54,10 @@ function scriptKindForLanguage(languageId: typeof TypeScriptAnalyzer.prototype.l
 		return ts.ScriptKind.JSX;
 	}
 	return languageId === 'typescript' ? ts.ScriptKind.TS : ts.ScriptKind.JS;
+}
+
+function parseDiagnosticsFor(sourceFile: ts.SourceFile): readonly ts.DiagnosticWithLocation[] {
+	return (sourceFile as ts.SourceFile & { readonly parseDiagnostics?: readonly ts.DiagnosticWithLocation[] }).parseDiagnostics ?? [];
 }
 
 function cancelledResult(analyzerId: string, languageId: string): AnalyzerResult {
@@ -96,6 +102,8 @@ class FlowBuilder {
 	private nextDiagnostic = 0;
 	private workItemsSinceYield = 0;
 	private completeness: 'complete' | 'partial' = 'complete';
+	private recoverableParseDiagnostics: readonly ts.DiagnosticWithLocation[] = [];
+	private readonly consumedParseDiagnostics = new Set<number>();
 	private skipNextEdge = false;
 	private readonly terminalNodeIds = new Set<string>();
 	private pendingNextEdges: PendingEdge[] = [];
@@ -108,7 +116,7 @@ class FlowBuilder {
 		const rootFunction: FlowFunction = { id: `function:${this.candidate.range.startOffset}`, name: this.candidate.name, sourceLocation: this.location(this.candidate.range.startOffset, this.candidate.range.endOffset, this.candidate.name) };
 		const edges = this.orderedEdges();
 		return {
-			metadata: { schemaVersion: '1.0.0', analyzerId: 'typescript', analyzerVersion: '0.6.0', languageId, generatedAt: new Date().toISOString(), sourceDocumentVersion: this.input.source.version, completeness: this.completeness, configurationDigest: this.input.configuration.configurationDigest, rootFunctionIdentifier: rootFunction.id },
+			metadata: { schemaVersion: '1.0.0', analyzerId: 'typescript', analyzerVersion: '0.7.0', languageId, generatedAt: new Date().toISOString(), sourceDocumentVersion: this.input.source.version, completeness: this.completeness, configurationDigest: this.input.configuration.configurationDigest, rootFunctionIdentifier: rootFunction.id },
 			rootFunction, nodes: this.nodes, edges, diagnostics: this.diagnostics,
 			source: { uri: this.input.source.uri, languageId, documentVersion: this.input.source.version }, completeness: this.completeness,
 		};
@@ -117,15 +125,42 @@ class FlowBuilder {
 	public async extractBody(body: ts.ConciseBody | ts.FunctionBody): Promise<void> {
 		await this.cooperate();
 		if (ts.isBlock(body)) {await this.extractStatements(body.statements);}
-		else {await this.extractExpression(body);}
+		else {
+			this.addRecoverableParseErrorsBefore(body.getStart(this.sourceFile));
+			await this.extractExpression(body);
+		}
+	}
+
+	public setRecoverableParseDiagnostics(diagnostics: readonly ts.DiagnosticWithLocation[]): void {
+		this.recoverableParseDiagnostics = diagnostics;
+	}
+
+	public addRecoverableParseErrorsBefore(boundary: number): void {
+		const bodyStart = this.candidate.fullRange.startOffset;
+		const pending = this.recoverableParseDiagnostics.map((diagnostic, index) => ({ diagnostic, index })).filter(({ diagnostic, index }) => {
+			const start = diagnostic.start;
+			return !this.consumedParseDiagnostics.has(index) && start !== undefined && start >= bodyStart && start < Math.min(boundary, this.candidate.fullRange.endOffset);
+		});
+		if (pending.length === 0) {return;}
+
+		for (const { index } of pending) {this.consumedParseDiagnostics.add(index);}
+		const parseError = pending[0].diagnostic;
+		if (parseError.start === undefined) {return;}
+		const start = parseError.start;
+		const end = Math.min(this.candidate.fullRange.endOffset, Math.max(start + 1, start + (parseError.length ?? 0)));
+		const sourceLocation = this.location(start, end);
+		const call = this.addSyntheticUnknownCall(sourceLocation);
+		this.addDiagnostic('unknown-call', 'warning', 'A recoverable parser error prevented a call from being analyzed.', sourceLocation, call.id);
 	}
 
 	private async extractStatements(statements: ts.NodeArray<ts.Statement> | readonly ts.Statement[]): Promise<void> {
 		for (const statement of statements) {
 			await this.cooperate();
+			this.addRecoverableParseErrorsBefore(statement.getStart(this.sourceFile));
 			await this.extractStatement(statement);
 		}
 	}
+
 
 	private async extractStatement(statement: ts.Statement): Promise<void> {
 		await this.cooperate();
@@ -330,26 +365,46 @@ class FlowBuilder {
 			case 'expression': node = { ...base, kind: 'expression', expression: data.expression ?? data.node.getText(this.sourceFile) }; break;
 			case 'try-catch': node = { ...base, kind: 'try-catch', catchBinding: data.catchBinding, hasFinally: data.hasFinally }; break;
 		}
+		this.appendNode(node, data.node);
+		return node;
+	}
+
+	private addSyntheticUnknownCall(sourceLocation: SourceLocation): Extract<FlowNode, { kind: 'call' }> {
+		const node: Extract<FlowNode, { kind: 'call' }> = {
+			id: `node:${this.nextNode++}`,
+			kind: 'call',
+			order: this.nodes.length,
+			sourceLocation,
+			calleeName: '<unknown>',
+			participant: fallbackParticipant('unknown'),
+			resolution: 'unknown',
+			label: '<unknown>',
+		};
+		this.appendNode(node, sourceLocation);
+		return node;
+	}
+
+	private appendNode(node: FlowNode, connectionSource: ts.Node | SourceLocation): void {
 		this.nodes.push(node);
 		const previous = this.nodes[this.nodes.length - 2];
 		if (this.pendingNextEdges.length > 0) {
-			for (const edge of this.pendingNextEdges) {this.addEdge(edge.sourceNodeId, node.id, edge.kind, data.node);}
+			for (const edge of this.pendingNextEdges) {this.addEdge(edge.sourceNodeId, node.id, edge.kind, connectionSource);}
 			this.pendingNextEdges = [];
 			this.skipNextEdge = false;
 		} else if (previous && this.skipNextEdge) {
 			this.skipNextEdge = false;
 		} else if (previous && !this.terminalNodeIds.has(previous.id)) {
-			this.addEdge(previous.id, node.id, 'next', data.node);
+			this.addEdge(previous.id, node.id, 'next', connectionSource);
 		}
-		return node;
 	}
 
-	private addEdge(sourceNodeId: string, targetNodeId: string, kind: FlowEdge['kind'], source: ts.Node): void {
+	private addEdge(sourceNodeId: string, targetNodeId: string, kind: FlowEdge['kind'], source: ts.Node | SourceLocation): void {
 		const executionOrder = this.nextEdge++;
-		this.edges.push({ id: `edge:${executionOrder}`, sourceNodeId, targetNodeId, kind, executionOrder, sourceLocation: this.location(source.getStart(this.sourceFile), source.end) });
+		const sourceLocation = 'uri' in source ? source : this.location(source.getStart(this.sourceFile), source.end);
+		this.edges.push({ id: `edge:${executionOrder}`, sourceNodeId, targetNodeId, kind, executionOrder, sourceLocation });
 	}
 
-	private addDiagnostic(kind: FlowDiagnostic['kind'], severity: FlowDiagnostic['severity'], message: string, source: ts.Node, nodeId?: string): void {
+	private addDiagnostic(kind: FlowDiagnostic['kind'], severity: FlowDiagnostic['severity'], message: string, source: ts.Node | SourceLocation, nodeId?: string): void {
 		this.completeness = 'partial';
 		this.diagnostics.push({
 			id: `diagnostic:${this.nextDiagnostic++}`,
@@ -357,7 +412,7 @@ class FlowBuilder {
 			severity,
 			message,
 			nodeId,
-			sourceLocation: this.location(source.getStart(this.sourceFile), source.end),
+			sourceLocation: 'uri' in source ? source : this.location(source.getStart(this.sourceFile), source.end),
 		});
 	}
 
@@ -418,43 +473,38 @@ class FlowBuilder {
 
 	private callInfo(node: ts.CallExpression | ts.NewExpression): CallInfo {
 		const expression = node.expression;
-		if (isOptionalCall(node) || isOptionalAccess(expression)) {
-			if (ts.isPropertyAccessExpression(expression)) {
-				return { calleeName: expression.name.text, participant: fallbackParticipant('unresolved'), resolution: 'unresolved', message: `Optional member call "${expression.name.text}" could not be fully resolved statically.` };
-			}
-			return { calleeName: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Optional call target could not be named statically.' };
-		}
 		if (ts.isElementAccessExpression(expression)) {
-			return { calleeName: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Computed callable target could not be named statically.' };
+			return selfCall('<unknown>');
 		}
 		if (ts.isPropertyAccessExpression(expression)) {
 			if (expression.expression.kind === ts.SyntaxKind.ThisKeyword) {
-				return { calleeName: expression.name.text, participant: undefined, invocationTarget: 'self', resolution: 'resolved', message: '' };
+				return selfCall(expression.name.text);
 			}
-			if (this.isDynamicReceiver(expression.expression) && !collectionMethodNames.has(expression.name.text)) {
-				return { calleeName: expression.name.text, participant: fallbackParticipant('unresolved'), resolution: 'unresolved', message: `Call "${expression.name.text}" has a dynamic receiver and was kept unresolved.` };
+			if (ts.isIdentifier(expression.expression)) {
+				if (isOptionalCall(node) || isOptionalAccess(expression)) {
+					return {
+						calleeName: expression.name.text,
+						participant: this.participantForReceiver(expression.expression, expression.name.text),
+						resolution: 'unresolved',
+						message: `Optional external call "${expression.name.text}" could not be fully resolved statically.`,
+					};
+				}
+				return { calleeName: expression.name.text, participant: this.participantForReceiver(expression.expression, expression.name.text), resolution: 'resolved', message: '' };
 			}
-			return { calleeName: expression.name.text, participant: this.participantForReceiver(expression.expression, expression.name.text), resolution: 'resolved', message: '' };
+			return selfCall(expression.name.text);
 		}
 		if (ts.isIdentifier(expression) || expression.kind === ts.SyntaxKind.SuperKeyword) {
-			return { calleeName: expression.getText(this.sourceFile), participant: fallbackParticipant('unknown'), resolution: 'resolved', message: '' };
+			return selfCall(expression.getText(this.sourceFile));
 		}
-		return { calleeName: '<unknown>', participant: fallbackParticipant('unknown'), resolution: 'unknown', message: 'Call target could not be named statically.' };
+		return selfCall('<unknown>');
 	}
 
-	private participantForReceiver(receiver: ts.Expression, methodName?: string): FlowParticipant {
+	private participantForReceiver(receiver: ts.Identifier, methodName?: string): FlowParticipant {
 		if (methodName && collectionMethodNames.has(methodName)) {
 			return namedParticipant('class', 'Array');
 		}
-		const name = receiver.getText(this.sourceFile);
-		if (ts.isIdentifier(receiver)) {
-			return namedParticipant(/^[A-Z]/.test(name) ? 'class' : 'instance', name);
-		}
-		return fallbackParticipant('unknown');
-	}
-
-	private isDynamicReceiver(expression: ts.Expression): boolean {
-		return ts.isCallExpression(expression) || ts.isNewExpression(expression) || ts.isElementAccessExpression(expression) || isOptionalAccess(expression);
+		const name = receiver.text;
+		return namedParticipant(/^[A-Z]/.test(name) ? 'class' : 'instance', name);
 	}
 
 	private throwIfCancelled(): void {
@@ -497,6 +547,10 @@ interface CallInfo {
 	readonly invocationTarget?: 'participant' | 'self';
 	readonly resolution: 'resolved' | 'unknown' | 'unresolved';
 	readonly message: string;
+}
+
+function selfCall(calleeName: string): CallInfo {
+	return { calleeName, invocationTarget: 'self', resolution: 'resolved', message: '' };
 }
 
 function isOptionalCall(node: ts.CallExpression | ts.NewExpression): boolean {

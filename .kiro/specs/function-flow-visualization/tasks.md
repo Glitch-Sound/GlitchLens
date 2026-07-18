@@ -779,7 +779,7 @@
   - _Boundary: Common Flow Model contract_
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 16.2, 16.5, 16.6, 18.1, 18.5_
 
-- [ ] 29.2 TypeScript / JavaScript の Call 主体を self フォールバックへ分類する
+- [x] 29.2 TypeScript / JavaScript の Call 主体を self フォールバックへ分類する
   - `this`、修飾なし direct、computed、chain、および明示 external receiver を構築できない optional Call を self target として出力する。
   - 単一識別子の外部 receiver を持つ optional property Call は外部 participant のままにし、receiver 不明だけでは Unknown を生成しない。
   - recoverable な解析エラーだけを Unknown と diagnostic で表し、分類意味論の変更に合わせて解析キャッシュを無効化する。
