@@ -64,6 +64,7 @@ class RenderContext {
 	public constructor(private readonly model: FlowModel) {}
 
 	public render(): RenderResult {
+		this.addParticipant('caller', 'caller');
 		this.addParticipant('root', 'self');
 		this.prepareParticipants();
 		this.renderParticipants();
@@ -373,9 +374,8 @@ class RenderContext {
 	}
 
 	private renderReturn(node: Extract<FlowNode, { kind: 'return' }>, edge: FlowEdge): void {
-		const sourceParticipant = this.nodeParticipants.get(edge.sourceNodeId) ?? 'root';
 		const message = formatMessageLabel({ kind: 'return', expression: node.expression });
-		const line = this.addLine(`${sourceParticipant}-->>root: ${escapeText(message)}`);
+		const line = this.addLine(`root-->>caller: ${escapeText(message)}`);
 		this.addSourceMap(node.sourceLocation, node.id, edge.id, line);
 		this.deactivateForNode(edge.sourceNodeId);
 	}

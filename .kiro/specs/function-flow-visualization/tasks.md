@@ -650,3 +650,40 @@
   - _Depends: 25.1, 25.2_
   - _Boundary: Renderer tests, VisualizationView tests, Python flow regression, Integration validation_
   - _Requirements: 4.1, 4.2, 4.3, 4.5, 5.1, 5.2, 5.3, 9.11, 9.18, 9.19_
+
+## caller を含む return 契約の追加タスク
+
+- [ ] 26. 対象関数の return を caller へ正しく描画する
+
+- [x] 26.1 固定 caller と return の共通 Renderer 契約を実装する
+  - 未特定の外部呼び出し元を固定 `caller` として `self` より先に宣言し、Flow Model、FlowParticipant、Language Analyzer に caller を追加しない。
+  - すべての Return node を `root` から `caller` への応答として描画し、直前の通常 Call、await、nested Call、Unknown、Unresolved を戻り値メッセージの送信元にしない。
+  - call participant の deactivate は return message の送信元決定から分離し、既存の terminal edge 起点で return message 後に閉じる。throw の既存表示は変更しない。
+  - Observable completion: `results.append(); return results` と `await service.save(); return result` が `root-->>caller` を出力し、`results-->>root` / `service-->>root` を出力しない。
+  - _Boundary: MermaidRenderer / RenderContext_
+  - _Requirements: 16.1, 17.1, 17.2, 17.3, 17.5, 17.6, 17.8_
+
+- [ ] 26.2 return の方向・活性化・SourceMap の Renderer 回帰を追加する
+  - 通常 Call、await、nested Call、Unknown / Unresolved、partial result、throw、同一 Return node を複数 edge が指すケースで、return の方向、重複排除、既存の活性化終了を検証する。
+  - caller が固定名 `caller` で一度だけ宣言され、対象関数名、class 名、module 名、file 名を推測して caller のタイトルに使用しないことを検証する。
+  - 長いまたは入れ子の return 式でも、要約後の `return` と戻り値概要が一度だけ `root-->>caller` に出力されることを検証する。
+  - return の SourceMap が Return node / edge と同じ正規 Mermaid 行を指し、caller の追加後も process note の行番号が維持されることを検証する。
+  - Observable completion: caller / self / callee の順、return message、activation、SourceMap、warning の期待値を含む Renderer test が成功する。
+  - _Depends: 26.1_
+  - _Boundary: MermaidRenderer tests / MessageLabelFormatter tests_
+  - _Requirements: 13.4, 16.1, 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8_
+
+- [ ] 26.3 caller を含む表示・コピー契約を統合検証する
+  - Renderer が出力した caller を含む正規 Mermaid text を、WebView の描画入力、詳細表示、fallback、Clipboard が構造変換なしで共有することを検証する。
+  - TypeScript / JavaScript の return fixture で、SourceMap、コードジャンプ、unknown / unresolved、partial result、既存の return 装飾が回帰しないことを確認する。
+  - `npm run check-types`、`npm run lint`、`npm run test:unit`、`npm run compile`、`npm run test:integration` を実行する。
+  - Observable completion: caller を含む表示 Mermaid と Clipboard 内容が byte-for-byte で一致し、共通 return 契約の品質ゲートが成功する。
+  - _Depends: 26.2_
+  - _Boundary: VisualizationView / ClipboardAdapter / Integration validation_
+  - _Requirements: 16.6, 17.7_
+
+## caller を含む return 契約のレビューゲート
+
+- Task 26.1 完了後: caller が Renderer 固定 participant に留まり、Flow Model、FlowParticipant、Language Analyzer、throw の既存契約を変更していないことを確認する。
+- Task 26.2 完了後: callee の activation 終了と `root-->>caller` の return が分離され、caller 名の推測、return の重複、SourceMap 行ずれがないことを確認する。
+- Task 26.3 完了後: WebView、fallback、Clipboard が caller を含む同一の正規 Mermaid text を利用し、全品質ゲートが成功することを確認する。
