@@ -110,6 +110,7 @@ export class WebviewVisualizationAdapter implements VisualizationView, Disposabl
 	private panel: WebviewPanelPort | undefined;
 	private currentViewId: string | undefined;
 	private currentMermaidText: string | undefined;
+	private currentSourceMapElementIds = new Set<string>();
 	private readonly panelDisposables: DisposableLike[] = [];
 	private readonly messageHandlers: Array<(message: AllowedWebviewMessage) => void> = [];
 
@@ -133,6 +134,7 @@ export class WebviewVisualizationAdapter implements VisualizationView, Disposabl
 		const viewId = createViewId();
 		this.currentViewId = viewId;
 		this.currentMermaidText = canCopyMermaid(model) ? model.mermaidText : undefined;
+		this.currentSourceMapElementIds = new Set(model.sourceMap.map(entry => entry.elementId));
 		panel.webview.html = renderHtml(model, createNonce(), viewId);
 		this.observer?.didShowVisualization(model);
 		panel.reveal();
@@ -171,6 +173,9 @@ export class WebviewVisualizationAdapter implements VisualizationView, Disposabl
 			if (!allowed) {
 				return;
 			}
+			if (allowed.type === 'sourceMapSelected' && !this.currentSourceMapElementIds.has(allowed.elementId ?? '')) {
+				return;
+			}
 			for (const handler of this.messageHandlers) {
 				handler(allowed);
 			}
@@ -188,6 +193,7 @@ export class WebviewVisualizationAdapter implements VisualizationView, Disposabl
 		this.panel = undefined;
 		this.currentViewId = undefined;
 		this.currentMermaidText = undefined;
+		this.currentSourceMapElementIds.clear();
 	}
 
 	private async copyCurrentMermaid(message: AllowedWebviewMessage): Promise<void> {

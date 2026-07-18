@@ -553,6 +553,7 @@ suite('VisualizationView', () => {
 			'participant caller as caller',
 			'participant root as self',
 			'participant service as service',
+			'caller->>root: invoke',
 			'activate root',
 			'root->>service: await save',
 			'activate service',
@@ -582,6 +583,7 @@ suite('VisualizationView', () => {
 		await adapter.show(model);
 		const html = factory.panel.webview.html;
 		assert.ok(html.includes('participant caller as caller'));
+		assert.ok(html.includes('caller-&gt;&gt;root: invoke'));
 		assert.ok(html.includes('root--&gt;&gt;caller: return result'));
 		assert.ok(html.includes('Call could not be resolved.'));
 		assert.ok(html.includes('Call is unknown.'));
@@ -590,6 +592,9 @@ suite('VisualizationView', () => {
 		const payload = JSON.parse(payloadMatch?.[1] ?? '{}');
 		assert.strictEqual(payload.mermaidText, callerReturnMermaid);
 		assert.deepStrictEqual(payload.sourceMap, callerReturnSourceMap);
+		const callerEntryLine = callerReturnMermaid.split('\n').indexOf('caller->>root: invoke') + 1;
+		assert.ok(callerEntryLine > 0);
+		assert.strictEqual(payload.sourceMap.some((entry: { elementId: string }) => entry.elementId === `line:${callerEntryLine}`), false);
 		assert.strictEqual(payload.state, 'partial');
 		assert.deepStrictEqual(payload.notices.map((item: { kind: string }) => item.kind), ['unresolved-call', 'unknown-call']);
 
@@ -600,9 +605,11 @@ suite('VisualizationView', () => {
 			}
 		});
 		factory.panel.emitMessage({ type: 'sourceMapSelected', elementId: 'line:return' });
+		factory.panel.emitMessage({ type: 'sourceMapSelected', elementId: `line:${callerEntryLine}` });
 		assert.deepStrictEqual(selectedMessages, [{ type: 'sourceMapSelected', elementId: 'line:return' }]);
 
 		const rendered = await renderWebviewMermaidFixture(callerReturnMermaid);
+		assert.ok(rendered.diagram.textContent?.includes('invoke'));
 		assert.ok(rendered.diagram.textContent?.includes('return result'));
 		const returnGroups = [...rendered.diagram.querySelectorAll<SVGTextElement>('svg text')]
 			.filter(text => text.classList.contains('glitchlens-return-message') || text.parentElement?.classList.contains('glitchlens-return-message'));
