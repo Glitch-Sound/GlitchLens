@@ -752,7 +752,7 @@
   - _Boundary: MermaidRenderer / RenderContext_
   - _Requirements: 18.1, 18.2, 18.3, 18.4, 18.5, 18.6, 18.7_
 
-- [ ] 28.4 自己呼び出しの共通表示・コピー回帰を検証する
+- [x] 28.4 自己呼び出しの共通表示・コピー回帰を検証する
   - TypeScript / JavaScript の自己呼び出し、通常 receiver、Unknown / Unresolved、return、throw、partial result で、既存の caller / self / terminal 表示と活性化が維持されることを確認する。
   - WebView、fallback、Clipboard が自己呼び出し Note を含む同一の正規 Mermaid text を共有することを検証する。
   - `npm run check-types`、`npm run lint`、`npm run test:unit`、`npm run compile`、`npm run test:integration` を実行する。

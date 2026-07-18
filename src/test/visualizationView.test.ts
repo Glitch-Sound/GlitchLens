@@ -632,6 +632,44 @@ suite('VisualizationView', () => {
 		assert.deepStrictEqual(clipboard.writes, [callerReturnMermaid, callerReturnMermaid]);
 	});
 
+	test('keeps self-call Mermaid text identical across Webview, fallback details, and Clipboard', async () => {
+		const factory = new StubPanelFactory();
+		const clipboard = new StubClipboard();
+		const adapter = new WebviewVisualizationAdapter(factory, clipboard, new StubNotification());
+		const selfCallMermaid = [
+			'sequenceDiagram',
+			'participant caller as caller',
+			'participant root as self',
+			'caller->>root: invoke',
+			'activate root',
+			'activate root',
+			'Note right of root: await validate_order',
+			'deactivate root',
+			'deactivate root',
+			'',
+		].join('\n');
+		const model = createVisualizationViewModel(successResult('success', { mermaidText: selfCallMermaid }));
+		assert.strictEqual(model.mermaidText, selfCallMermaid);
+		assert.strictEqual(model.fallbackText, selfCallMermaid);
+		await adapter.show(model);
+		const payloadMatch = factory.panel.webview.html.match(/const GLITCHLENS_VIEW_MODEL=(\{.*?\});const vscode=/);
+		assert.ok(payloadMatch);
+		assert.strictEqual(JSON.parse(payloadMatch?.[1] ?? '{}').mermaidText, selfCallMermaid);
+		assert.ok(factory.panel.webview.html.includes('Note right of root: await validate_order'));
+
+		factory.panel.emitMessage({ type: 'copyMermaid', viewId: factory.panel.currentViewId() });
+		await clipboard.flush();
+		assert.deepStrictEqual(clipboard.writes, [selfCallMermaid]);
+
+		await adapter.show(createVisualizationViewModel(successResult('success', { mermaidText: selfCallMermaid }), { forceFallback: true }));
+		const fallbackDom = new JSDOM(factory.panel.webview.html);
+		assert.strictEqual(fallbackDom.window.document.querySelector('.diagram-fallback pre')?.textContent, selfCallMermaid);
+		fallbackDom.window.close();
+		factory.panel.emitMessage({ type: 'copyMermaid', viewId: factory.panel.currentViewId() });
+		await clipboard.flush();
+		assert.deepStrictEqual(clipboard.writes, [selfCallMermaid, selfCallMermaid]);
+	});
+
 	test('does not copy failure or missing Mermaid text and notifies the reason', async () => {
 		const factory = new StubPanelFactory();
 		const clipboard = new StubClipboard();
