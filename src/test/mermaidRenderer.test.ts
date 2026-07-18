@@ -14,15 +14,16 @@ suite('MermaidRenderer', () => {
 
 		assert.ok(result.mermaidText.startsWith('sequenceDiagram\n'));
 		assert.ok(result.mermaidText.includes('participant root as self'));
+		assert.ok(result.mermaidText.includes('participant caller as caller'));
 		assert.ok(result.mermaidText.includes('participant fetchUser as fetchUser'));
 		assert.ok(result.mermaidText.includes('participant saveUser as saveUser'));
 		assert.ok(result.mermaidText.includes('root->>fetchUser: fetchUser'));
 		assert.ok(result.mermaidText.includes('root->>saveUser: await saveUser'));
-		assert.ok(result.mermaidText.includes('saveUser-->>root: return user'));
+		assert.ok(result.mermaidText.includes('root-->>caller: return user'));
 
 		const fetchLine = result.mermaidText.indexOf('root->>fetchUser');
 		const saveLine = result.mermaidText.indexOf('root->>saveUser');
-		const returnLine = result.mermaidText.indexOf('saveUser-->>root');
+		const returnLine = result.mermaidText.indexOf('root-->>caller: return user');
 		assert.ok(fetchLine < saveLine);
 		assert.ok(saveLine < returnLine);
 		assert.deepStrictEqual(result.warnings, []);
@@ -40,7 +41,7 @@ suite('MermaidRenderer', () => {
 			'deactivate fetchUser',
 			'root->>saveUser: await saveUser',
 			'activate saveUser',
-			'saveUser-->>root: return user',
+			'root-->>caller: return user',
 			'deactivate saveUser',
 			'deactivate root',
 		]);
@@ -55,8 +56,8 @@ suite('MermaidRenderer', () => {
 			],
 		}));
 		const text = result.mermaidText;
-		assert.ok(text.indexOf('activate fetchUser') < text.indexOf('fetchUser-->>root: return user'));
-		assert.ok(text.indexOf('fetchUser-->>root: return user') < text.indexOf('deactivate fetchUser'));
+		assert.ok(text.indexOf('activate fetchUser') < text.indexOf('root-->>caller: return user'));
+		assert.ok(text.indexOf('root-->>caller: return user') < text.indexOf('deactivate fetchUser'));
 	});
 
 	test('represents unknown and unresolved calls without forcing resolution', () => {
@@ -571,6 +572,128 @@ suite('MermaidRenderer', () => {
 
 		assert.strictEqual(countOccurrences(result.mermaidText, 'return result'), 1);
 		assert.deepStrictEqual(result.warnings, []);
+	});
+
+	test('routes returns from self to the fixed caller and never from the last call participant', () => {
+		const model = createModel({
+			nodes: [
+				callAt('node:save', 1, 'save', 'resolved', 2),
+				{
+					id: 'node:return',
+					kind: 'return' as const,
+					order: 2,
+					sourceLocation: location(3, 2, 3, 50),
+					expression: 'results',
+				},
+			],
+			edges: [
+				edge('edge:save', 'node:save', 1),
+				edge('edge:return', 'node:return', 2, 'next', 'node:save'),
+			],
+		});
+		const result = new MermaidRenderer().render(model);
+
+		assert.strictEqual(countOccurrences(result.mermaidText, 'participant caller as caller'), 1);
+		assert.strictEqual(countOccurrences(result.mermaidText, 'root-->>caller: return results'), 1);
+		assert.strictEqual(result.mermaidText.includes('save-->>root: return results'), false);
+		assert.ok(result.mermaidText.indexOf('deactivate save') < result.mermaidText.indexOf('deactivate root'));
+	});
+
+	test('keeps caller identity fixed for long nested return expressions', () => {
+		const model = createModel({
+			nodes: [{
+				id: 'node:return',
+				kind: 'return' as const,
+				order: 1,
+				sourceLocation: location(2, 2, 2, 120),
+				expression: 'buildResult({ documentUri: source.documentUri, values: source.values, metadata: source.metadata, nested: compute(source) })',
+			}],
+			edges: [edge('edge:return', 'node:return', 1)],
+		});
+		const result = new MermaidRenderer().render(model);
+
+		assert.strictEqual(countOccurrences(result.mermaidText, 'participant caller as caller'), 1);
+		assert.strictEqual(countOccurrences(result.mermaidText, 'root-->>caller: return '), 1);
+		assert.strictEqual(result.mermaidText.includes('buildResult(...)'), true);
+		assert.strictEqual(result.mermaidText.includes('caller-->>root'), false);
+	});
+
+	test('maps every return to its exact root-to-caller line across call states', () => {
+		const fixtures = [
+			{ name: 'await', resolution: 'resolved' as const, awaited: true },
+			{ name: 'nested', resolution: 'resolved' as const, awaited: false },
+			{ name: 'unknown', resolution: 'unknown' as const, awaited: false },
+			{ name: 'unresolved', resolution: 'unresolved' as const, awaited: false },
+		];
+		for (const fixture of fixtures) {
+			const callNode = callAt(`node:${fixture.name}`, 1, fixture.name, fixture.resolution, 2);
+			const returnNode = {
+				id: `node:${fixture.name}:return`,
+				kind: 'return' as const,
+				order: 2,
+				sourceLocation: location(4, 2, 4, 20),
+				expression: `${fixture.name}Result`,
+			};
+			const model = createModel({
+				nodes: [callNode, returnNode],
+				edges: [edge(`edge:${fixture.name}`, callNode.id, 1), edge(`edge:${fixture.name}:return`, returnNode.id, 2, 'next', callNode.id)],
+				completeness: fixture.name === 'unknown' ? 'partial' : 'complete',
+			});
+			const result = new MermaidRenderer().render(model);
+			const returnEntry = result.sourceMap.find(entry => entry.nodeId === returnNode.id && entry.edgeId === `edge:${fixture.name}:return`);
+			assert.ok(returnEntry, fixture.name);
+			const lineNumber = Number(returnEntry?.elementId.replace('line:', ''));
+			assert.strictEqual(result.mermaidText.split('\n')[lineNumber - 1], `root-->>caller: return ${fixture.name}Result`);
+			assert.strictEqual(result.mermaidText.includes(`${fixture.name}-->>root: return`), false);
+		}
+	});
+
+	test('keeps throw notes separate from caller return and preserves process-note line mapping', () => {
+		const model = createModel({
+			nodes: [
+				{ id: 'node:throw', kind: 'throw' as const, order: 1, sourceLocation: location(2, 2, 2, 12), expression: 'error' },
+				{ id: 'node:return', kind: 'return' as const, order: 2, sourceLocation: location(3, 2, 3, 12), expression: 'result' },
+		],
+		edges: [edge('edge:throw', 'node:throw', 1, 'throw'), edge('edge:return', 'node:return', 2, 'return')],
+		});
+		const result = new MermaidRenderer().render(model);
+		assert.strictEqual(result.mermaidText.includes('Note over root: throw error'), true);
+		assert.strictEqual(result.mermaidText.includes('root-->>caller: return result'), true);
+		for (const decoration of result.processNoteDecorations) {
+			assert.ok(result.mermaidText.split('\n')[decoration.mermaidLine - 1].startsWith('Note over '));
+		}
+	});
+
+	test('routes a return after genuinely nested calls from root to caller', () => {
+		const inner = callAt('node:inner', 1, 'inner', 'resolved', 2);
+		const outer = callAt('node:outer', 2, 'outer', 'resolved', 3);
+		const terminal = { id: 'node:return', kind: 'return' as const, order: 3, sourceLocation: location(4, 2, 4, 20), expression: 'outerResult' };
+		const result = new MermaidRenderer().render(createModel({
+			nodes: [inner, outer, terminal],
+			edges: [edge('edge:inner', inner.id, 1), edge('edge:outer', outer.id, 2, 'next', inner.id), edge('edge:return', terminal.id, 3, 'next', outer.id)],
+		}));
+
+		assert.ok(result.mermaidText.includes('root->>inner: inner'));
+		assert.ok(result.mermaidText.includes('root->>outer: outer'));
+		assert.ok(result.mermaidText.includes('root-->>caller: return outerResult'));
+		assert.strictEqual(result.mermaidText.includes('inner-->>root: return outerResult'), false);
+		assert.strictEqual(result.mermaidText.includes('outer-->>root: return outerResult'), false);
+	});
+
+	test('preserves caller return and SourceMap in an explicitly partial model with diagnostics', () => {
+		const returnNode = { id: 'node:return-partial', kind: 'return' as const, order: 2, sourceLocation: location(5, 2, 5, 20), expression: 'partialResult' };
+		const result = new MermaidRenderer().render(createModel({
+			nodes: [call('node:known', 1, 'known', 'resolved'), returnNode],
+			edges: [edge('edge:known', 'node:known', 1), edge('edge:return-partial', returnNode.id, 2, 'next', 'node:known')],
+			completeness: 'partial',
+			diagnostics: [{ id: 'diagnostic:partial', kind: 'order-uncertain', severity: 'warning', message: 'Partial analysis.', sourceLocation: location(6, 2, 6, 15) }],
+		}));
+		const entry = result.sourceMap.find(item => item.nodeId === returnNode.id && item.edgeId === 'edge:return-partial');
+		assert.ok(entry);
+		const line = Number(entry?.elementId.replace('line:', ''));
+		assert.strictEqual(result.mermaidText.split('\n')[line - 1], 'root-->>caller: return partialResult');
+		assert.strictEqual(result.mermaidText.includes('known-->>root: return partialResult'), false);
+		assert.strictEqual(result.mermaidText.includes('Partial analysis.'), true);
 	});
 
 	test('deduplicates participants for repeated calls to the same target', () => {

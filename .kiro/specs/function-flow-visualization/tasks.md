@@ -663,7 +663,7 @@
   - _Boundary: MermaidRenderer / RenderContext_
   - _Requirements: 16.1, 17.1, 17.2, 17.3, 17.5, 17.6, 17.8_
 
-- [ ] 26.2 return の方向・活性化・SourceMap の Renderer 回帰を追加する
+- [x] 26.2 return の方向・活性化・SourceMap の Renderer 回帰を追加する
   - 通常 Call、await、nested Call、Unknown / Unresolved、partial result、throw、同一 Return node を複数 edge が指すケースで、return の方向、重複排除、既存の活性化終了を検証する。
   - caller が固定名 `caller` で一度だけ宣言され、対象関数名、class 名、module 名、file 名を推測して caller のタイトルに使用しないことを検証する。
   - 長いまたは入れ子の return 式でも、要約後の `return` と戻り値概要が一度だけ `root-->>caller` に出力されることを検証する。
