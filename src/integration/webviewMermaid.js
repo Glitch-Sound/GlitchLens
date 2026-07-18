@@ -301,6 +301,9 @@ function styleControlConditionLabel(text, className, color) {
 }
 
 function decorateSequenceParticipants(diagram) {
+	for (const group of diagram.querySelectorAll('svg g[id^="root-"]')) {
+		group.classList.add('glitchlens-root-participant');
+	}
 	const rootName = GLITCHLENS_VIEW_MODEL.rootFunctionName;
 	for (const text of diagram.querySelectorAll('svg text')) {
 		const label = text.textContent?.trim();

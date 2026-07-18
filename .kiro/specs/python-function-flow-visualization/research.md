@@ -47,6 +47,14 @@
 - terminal label の修正が既存表示を壊すリスク — Return / Throw の式と message を個別に検証し、TypeScript Renderer 回帰を維持する。
 - Analyzer version 更新漏れのリスク — parser / 変換意味論の変更では既存 cache key の analyzer version を更新する。
 
+### Decision: 共通 root の表示名を `self` として受け入れる
+
+- **Context**: 共通 Requirement 16 が、空の左端ライフラインを表示名 `self` へ変更した。
+- **Sources Consulted**: `src/renderer/mermaidRenderer.ts`、`src/integration/webviewMermaid.js`、共通仕様の Requirement 16。
+- **Findings**: Renderer は内部 participant ID `root` を message、SourceMap、WebView の装飾識別に使用している。Python Analyzer は root participant を生成せず、共通 Renderer の出力を利用する。
+- **Selected Approach**: Python 固有の participant、Renderer、WebView 分岐を追加せず、共通 Renderer が出力する `participant root as self` をそのまま利用する。
+- **Follow-up**: Python Flow Model を入力とした Renderer 回帰で、`self` の表示、操作名、Unknown / Unresolved、コピー対象 Mermaid text の一致を確認する。
+
 ## References
 
 - [Lezer Python](https://github.com/lezer-parser/python) — Python 構文解析の既存基盤

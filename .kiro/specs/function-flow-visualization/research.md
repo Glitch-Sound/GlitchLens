@@ -234,7 +234,7 @@
 
 ### Summary
 
-- 現在の Renderer は root function 名を左端 participant の label に用いるため、指定関数を無題にするには root の表示規則を分離する必要がある。
+- 現在の Renderer は固定 ID `root` を空 label で出力している。左端を `self` にするには、root の表示名だけを変更し、内部 ID は維持する必要がある。
 - TypeScript Analyzer は receiver を取得できるため、クラス名またはインスタンス名だけを plain-data `FlowParticipant` として Flow Model に渡せる。
 - module URI、ファイル名、役割名を代替タイトルにすると今回の要件を逸脱するため、識別できない場合は `Unknown`／`Unresolved` の固定 participant へ集約する必要がある。
 
@@ -244,22 +244,22 @@
 
 - **Sources Consulted**: `src/flow-model/flowModel.ts`、`src/flow-model/flowNode.ts`、`src/analyzers/typescript/typescriptAnalyzer.ts`、`src/analyzers/python/pythonAnalyzer.ts`、`src/renderer/mermaidRenderer.ts`、関連 unit tests
 - **Findings**:
-  - root は `FlowFunction.name` を participant label として使用しており、固定の無題 root 表示へ変更する必要がある。
+  - root は固定 ID `root` を participant ID として使用し、空 label で出力している。固定の `self` root 表示へ変更する必要がある。
   - PropertyAccessExpression の receiver は analyzer に存在するため、Identifier receiver をクラスまたはインスタンスとして Flow Model へ渡せる。
   - existing participant key を利用すれば、`Unknown` と `Unresolved` を各一つへ集約できる。
 - **Implications**:
   - Call participant の key と label を model contract に追加し、renderer は key で重複排除する。
-  - root は model 名や source URI を title に使用せず、Renderer 固定 ID と空 label で最初に出力する。
+  - root は model 名や source URI を title に使用せず、Renderer 固定 ID `root` と label `self` で最初に出力する。
   - `calleeName` は引数を含まない要求 message として残す。
 
 ### Design Decisions
 
-#### Decision: 無題 root とクラス／インスタンス限定の FlowParticipant を導入する
+#### Decision: `self` root とクラス／インスタンス限定の FlowParticipant を導入する
 
 - **Alternatives Considered**:
   1. Renderer が `calleeName`、source URI、または関数名からライフライン名を推測する。
   2. TypeScript TypeChecker と言語別の型解析を導入し、実体を完全解決する。
-  3. Renderer が無題 root を固定出力し、Analyzer が構文から確定できるクラス／インスタンスだけを Call participant として渡す。
+  3. Renderer が `self` root を固定出力し、Analyzer が構文から確定できるクラス／インスタンスだけを Call participant として渡す。
 - **Selected Approach**: 3 を採用する。
 - **Rationale**: 静的解析のみ・Language Analyzer boundary・Common Flow Model first を守り、ユーザーが指定したタイトルの範囲を超えない。
 - **Trade-offs**: 型を完全解決しないため、候補がない呼び出しは module fallback ではなく Unknown / Unresolved になる。
@@ -275,7 +275,7 @@
 
 - 同じ label を異なる主体が共有するリスク — `FlowParticipant.key` を participant の同一性に使い、label では集約しない。
 - `Unknown` が多数表示されるリスク — kind ごとの固定 key を使用して一つに集約する。
-- 無題 root が Mermaid 構文または表示テーマで意図せず可視化されるリスク — 実 Mermaid 描画を含む renderer fixture で空タイトルと最左位置を検証する。
+- `self` root が Mermaid 構文または表示テーマで意図せず表示されないリスク — 実 Mermaid 描画を含む renderer fixture で `self` の表示名と最左位置を検証する。
 - collection method の receiver が実体不明なリスク — Requirement 14 の対象だけを `Array` クラスとして表し、その他は推測せず fallback する。
 
 ---

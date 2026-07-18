@@ -13,7 +13,7 @@ suite('MermaidRenderer', () => {
 		const result = new MermaidRenderer().render(model);
 
 		assert.ok(result.mermaidText.startsWith('sequenceDiagram\n'));
-		assert.ok(result.mermaidText.includes('participant root as '));
+		assert.ok(result.mermaidText.includes('participant root as self'));
 		assert.ok(result.mermaidText.includes('participant fetchUser as fetchUser'));
 		assert.ok(result.mermaidText.includes('participant saveUser as saveUser'));
 		assert.ok(result.mermaidText.includes('root->>fetchUser: fetchUser'));
@@ -64,7 +64,7 @@ suite('MermaidRenderer', () => {
 		assert.strictEqual(edgeEntry.sourceLocation.uri, 'file:///workspace/source.ts');
 	});
 
-	test('renders the first call without an incoming edge from the untitled root', () => {
+	test('renders the first call without an incoming edge from the self root', () => {
 		const model = createModel({
 			nodes: [call('node:first', 1, 'firstCall', 'resolved')],
 			edges: [],
@@ -559,7 +559,7 @@ suite('MermaidRenderer', () => {
 		assert.strictEqual(countOccurrences(result.mermaidText, 'root->>load: load'), 2);
 	});
 
-	test('keeps the root lifeline untitled and separates fallback participants by fixed key', () => {
+	test('keeps the root lifeline named self and separates fallback participants by fixed key', () => {
 		const model = createModel({
 			nodes: [
 				{ ...call('node:unknown', 1, 'lookup', 'unknown'), participant: { key: 'unknown', label: 'Unknown', kind: 'unknown' as const } },
@@ -569,7 +569,7 @@ suite('MermaidRenderer', () => {
 		});
 		const result = new MermaidRenderer().render(model);
 
-		assert.ok(result.mermaidText.includes('participant root as '));
+		assert.ok(result.mermaidText.includes('participant root as self'));
 		assert.strictEqual(countOccurrences(result.mermaidText, 'participant Unknown as Unknown'), 1);
 		assert.strictEqual(countOccurrences(result.mermaidText, 'participant Unresolved as Unresolved'), 1);
 		assert.ok(result.mermaidText.includes('root->>Unknown: unknown call'));

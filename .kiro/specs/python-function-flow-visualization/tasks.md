@@ -144,6 +144,14 @@
   - _Depends: 10.1, 10.2_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 2.10, 2.11, 2.12, 3.1, 3.2, 3.3, 3.4, 3.5, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
+- [x] 12. Python の共通 `self` root 契約を回帰検証する
+  - Python Flow Model を共通 Renderer へ渡し、最左の `self`、主体ライフライン、操作名、Unknown / Unresolved を既存言語と同じ規則で表示する。
+  - 表示 Mermaid と Clipboard 内容の一致を確認し、Python 専用の Renderer または WebView 分岐を追加しない。
+  - **完了条件**: Python fixture で `participant root as self`、主体と操作名の分離、Unknown / Unresolved、表示と Clipboard の完全一致、内部 ID `root` による WebView 装飾の継続、および Python 専用描画分岐がないことを確認できる。
+  - _Depends: 共通仕様 Task 24.2_
+  - _Boundary: PythonAnalyzer tests, MermaidRenderer tests, Integration validation_
+  - _Requirements: 6.5, 6.6_
+
 ## Review Gates
 
 - Task 1 完了後: Flow Edge の追加と Renderer の共通意味論を確認する。
@@ -153,4 +161,5 @@
 - Task 10.1 完了後: participant と operation name が分離され、識別不能な主体をモジュール名等で補完していないことを確認する。
 - Task 10.2 完了後: Await → Call と Call → Return / Throw の edge が既存 Renderer の表示契約に一致することを確認する。
 - Task 11 完了後: Mermaid text、コピー、SourceMap、CodeLens、Workspace Trust、cache を含む言語横断契約を確認する。
+- Task 12 完了後: Python Flow Model が共通の `self` root 契約を利用し、Python 専用の Renderer / WebView 分岐を必要としないことを確認する。
 - 共通 design の「Cross-language Execution Order and Loop Control」に残る、TypeScript / JavaScript の入れ子 call が将来追従するという記述は、Task 2 が実装済みであることを前提に、共通仕様レビューで実装済み状態へ更新する。この注記自体は共通 requirements.md / design.md を変更しない。

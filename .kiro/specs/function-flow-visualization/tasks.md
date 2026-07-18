@@ -607,3 +607,20 @@
   - _Depends: 20.3, 21.4, 22.2, 22.3_
   - _Boundary: Final integration validation_
   - _Requirements: 14.5, 15.1, 15.2, 15.3, 15.4, 15.5, 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 16.7_
+
+- [x] 24. 左端ライフラインの `self` 表示を適用する
+- [x] 24.1 Mermaid の root participant を `self` として出力する
+  - 内部 participant ID `root` を維持したまま、指定関数の最左ライフラインを `self` として出力する。
+  - entry-call の一回だけの描画、主体ライフラインの集約、各一つの Unknown / Unresolved、操作名の表示を維持する。
+  - **完了条件**: Mermaid fixture で `participant root as self`、最初の Call の一回だけの message、Unknown / Unresolved の各一つのライフライン、nodeId と sourceLocation を持ち架空の edgeId を持たない SourceMap を確認できる。
+  - _Depends: 21.3, 22.1_
+  - _Boundary: MermaidRenderer_
+  - _Requirements: 16.1, 16.3, 16.4, 16.5, 16.7_
+
+- [x] 24.2 `self` ライフラインの表示・コピー統合を回帰検証する
+  - Renderer、表示、コピーの各経路で同じ `self` を含む Mermaid text を使用し、既存の SourceMap、コードジャンプ、partial result、未解決通知を維持する。
+  - WebView の root participant 装飾が表示名ではなく内部 ID `root` を通じて継続して適用されることを検証する。
+  - **完了条件**: VisualizationView と ClipboardAdapter の統合 fixture で、最左の `self`、表示 Mermaid と Clipboard 内容の完全一致、root participant 装飾、entry-call の一回だけの描画、および SourceMap の非退行を確認できる。
+  - _Depends: 24.1_
+  - _Boundary: MermaidRenderer tests, VisualizationView, ClipboardAdapter, Integration validation_
+  - _Requirements: 16.1, 16.6, 16.7_

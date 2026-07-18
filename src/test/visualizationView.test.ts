@@ -51,7 +51,7 @@ suite('VisualizationView', () => {
 	});
 
 	test('preserves Mermaid text, SourceMap, process order, and partial notices for integration display', () => {
-		const mermaidText = 'sequenceDiagram\nparticipant root as \nroot->>service: load\nNote over root: break\n';
+		const mermaidText = 'sequenceDiagram\nparticipant root as self\nroot->>service: load\nNote over root: break\n';
 		const model = createVisualizationViewModel(successResult('partial', {
 			mermaidText,
 			sourceMap: [{ elementId: 'line:3', nodeId: 'node:load', edgeId: 'edge:load', sourceLocation: testSourceLocation() }],
@@ -469,10 +469,10 @@ suite('VisualizationView', () => {
 		window.close();
 	});
 
-	test('decorates process notes from semantic metadata in an actual Mermaid SVG fixture', async () => {
+		test('decorates process notes from semantic metadata in an actual Mermaid SVG fixture', async () => {
 		const mermaidText = [
 			'sequenceDiagram',
-			'participant root as processOrders',
+			'participant root as self',
 			'Note over root: arbitrary expression result',
 			'root->>root: continue with any label',
 			'Note over root,unknown: unresolved arbitrary text',
@@ -480,6 +480,7 @@ suite('VisualizationView', () => {
 		const { window, diagram } = await renderWebviewMermaidFixture(mermaidText, [
 			{ mermaidLine: 3, nodeKind: 'expression' },
 		]);
+		assert.ok(diagram.querySelector('svg g[id^="root-"] .glitchlens-root-participant, svg g[id^="root-"].glitchlens-root-participant'));
 		const noteGroups = [...diagram.querySelectorAll<SVGGElement>('svg g[data-et="note"]')];
 
 		assert.strictEqual(noteGroups.length, 2);
@@ -527,21 +528,22 @@ suite('VisualizationView', () => {
 		const clipboard = new StubClipboard();
 		const notifications = new StubNotification();
 		const adapter = new WebviewVisualizationAdapter(factory, clipboard, notifications);
-		await adapter.show(createVisualizationViewModel(successResult('success', { mermaidText: 'sequenceDiagram\nroot->>load: success\n' })));
+		await adapter.show(createVisualizationViewModel(successResult('success', { mermaidText: 'sequenceDiagram\nparticipant root as self\nroot->>load: success\n' })));
+		assert.ok(factory.panel.webview.html.includes('participant root as self'));
 
 		factory.panel.emitMessage({ type: 'copyMermaid', viewId: factory.panel.currentViewId(), text: 'attacker supplied text' });
 
 		await clipboard.flush();
-		assert.deepStrictEqual(clipboard.writes, ['sequenceDiagram\nroot->>load: success\n']);
+		assert.deepStrictEqual(clipboard.writes, ['sequenceDiagram\nparticipant root as self\nroot->>load: success\n']);
 		assert.deepStrictEqual(notifications.messages, ['info:Mermaid text copied.']);
 
-		await adapter.show(createVisualizationViewModel(successResult('partial', { mermaidText: 'sequenceDiagram\nroot->>load: partial\n' })));
+		await adapter.show(createVisualizationViewModel(successResult('partial', { mermaidText: 'sequenceDiagram\nparticipant root as self\nroot->>load: partial\n' })));
 		factory.panel.emitMessage({ type: 'copyMermaid', viewId: factory.panel.currentViewId() });
 
 		await clipboard.flush();
 		assert.deepStrictEqual(clipboard.writes, [
-			'sequenceDiagram\nroot->>load: success\n',
-			'sequenceDiagram\nroot->>load: partial\n',
+			'sequenceDiagram\nparticipant root as self\nroot->>load: success\n',
+			'sequenceDiagram\nparticipant root as self\nroot->>load: partial\n',
 		]);
 	});
 

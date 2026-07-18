@@ -3,7 +3,14 @@ import * as assert from 'assert';
 import { PythonAnalyzer, PythonFunctionLocator, TypeScriptAnalyzer, TypeScriptFunctionLocator } from '../analyzers';
 import type { AnalyzerInput } from '../analyzers';
 import { AnalyzerRegistry, VisualizeFunctionFlowUseCase } from '../application';
-import { createVisualizationViewModel } from '../integration/visualizationView';
+import {
+	createVisualizationViewModel,
+	WebviewVisualizationAdapter,
+	type ClipboardAdapter,
+	type WebviewPanelFactory,
+	type WebviewPanelPort,
+	type VisualizationViewNotification,
+} from '../integration/visualizationView';
 import { MermaidRenderer } from '../renderer';
 
 function input(text: string, cursorOffset: number): AnalyzerInput {
@@ -165,6 +172,8 @@ suite('Python function flow', () => {
 			'async def process_orders(service, logger):',
 			'    await service.save()',
 			'    logger.error("failed")',
+			'    foo()',
+			'    obj.child.run()',
 			'    return build_result()',
 		].join('\n');
 		const source = { uri: 'file:///workspace/process_orders.py', languageId: 'python', version: 3, text } as const;
@@ -183,12 +192,17 @@ suite('Python function flow', () => {
 			cancellation: { isCancellationRequested: false },
 		});
 
-		assert.strictEqual(result.status, 'success');
-		if (result.status !== 'success') { return; }
+		assert.ok(result.status === 'success' || result.status === 'partial');
+		if (result.status !== 'success' && result.status !== 'partial') { return; }
 		assert.strictEqual(result.canCopyMermaid, true);
 		assert.strictEqual(result.mermaidText, new MermaidRenderer().render(result.model).mermaidText);
+		assert.ok(result.mermaidText.includes('participant root as self'));
 		assert.ok(result.mermaidText.includes('participant service as service'));
 		assert.ok(result.mermaidText.includes('participant logger as logger'));
+		assert.ok(result.mermaidText.includes('participant Unknown as Unknown'));
+		assert.ok(result.mermaidText.includes('participant Unresolved as Unresolved'));
+		assert.ok(result.mermaidText.includes('root->>Unknown: foo'));
+		assert.ok(result.mermaidText.includes('root->>Unresolved: run (unresolved)'));
 		assert.ok(result.mermaidText.includes('await save'));
 		assert.ok(result.mermaidText.includes('return build_result(...)'));
 		assert.ok(result.sourceMap.length > 0);
@@ -198,6 +212,16 @@ suite('Python function flow', () => {
 		assert.strictEqual(view.mermaidText, result.mermaidText);
 		assert.strictEqual(view.fallbackText, result.mermaidText);
 		assert.deepStrictEqual(view.sourceMap, result.sourceMap);
+
+		const factory = new PythonStubPanelFactory();
+		const clipboard = new PythonStubClipboard();
+		const notifications = new PythonStubNotification();
+		const adapter = new WebviewVisualizationAdapter(factory, clipboard, notifications);
+		await adapter.show(view);
+		assert.ok(factory.panel.webview.html.includes('participant root as self'));
+		await adapter.copyCurrentMermaidForTest();
+		assert.deepStrictEqual(clipboard.writes, [result.mermaidText]);
+		assert.deepStrictEqual(notifications.messages, ['info:Mermaid text copied.']);
 
 		const tsText = 'async function process_orders(service: Service) {\n  await service.save();\n  return build_result();\n}';
 		const tsSource = { uri: 'file:///workspace/process_orders.ts', languageId: 'typescript', version: 3, text: tsText } as const;
@@ -221,3 +245,59 @@ suite('Python function flow', () => {
 		assert.ok(tsResult.mermaidText.includes('return build_result(...)'));
 	});
 });
+
+class PythonStubPanelFactory implements WebviewPanelFactory {
+	public readonly panel = new PythonStubPanel();
+
+	public createPanel(): WebviewPanelPort {
+		return this.panel;
+	}
+}
+
+class PythonStubPanel implements WebviewPanelPort {
+	public readonly webview = { html: '' };
+	private disposeHandler: (() => void) | undefined;
+	private messageHandler: ((message: unknown) => void) | undefined;
+
+	public reveal(): void {}
+
+	public dispose(): void { this.disposeHandler?.(); }
+
+	public onDidDispose(listener: () => void) {
+		this.disposeHandler = listener;
+		return { dispose: () => { this.disposeHandler = undefined; } };
+	}
+
+	public onDidReceiveMessage(listener: (message: unknown) => void) {
+		this.messageHandler = listener;
+		return { dispose: () => { this.messageHandler = undefined; } };
+	}
+}
+
+class PythonStubClipboard implements ClipboardAdapter {
+	public readonly writes: string[] = [];
+
+	public writeText(text: string): Promise<void> {
+		this.writes.push(text);
+		return Promise.resolve();
+	}
+}
+
+class PythonStubNotification implements VisualizationViewNotification {
+	public readonly messages: string[] = [];
+
+	public showInfo(message: string): Promise<void> {
+		this.messages.push(`info:${message}`);
+		return Promise.resolve();
+	}
+
+	public showWarning(message: string): Promise<void> {
+		this.messages.push(`warning:${message}`);
+		return Promise.resolve();
+	}
+
+	public showError(message: string): Promise<void> {
+		this.messages.push(`error:${message}`);
+		return Promise.resolve();
+	}
+}

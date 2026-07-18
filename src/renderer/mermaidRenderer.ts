@@ -63,7 +63,7 @@ class RenderContext {
 	public constructor(private readonly model: FlowModel) {}
 
 	public render(): RenderResult {
-		this.addParticipant('root', '');
+		this.addParticipant('root', 'self');
 		this.prepareParticipants();
 		this.renderParticipants();
 		this.renderEntryCall();
