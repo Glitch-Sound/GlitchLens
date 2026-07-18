@@ -55,6 +55,23 @@
 - **Selected Approach**: Python 固有の participant、Renderer、WebView 分岐を追加せず、共通 Renderer が出力する `participant root as self` をそのまま利用する。
 - **Follow-up**: Python Flow Model を入力とした Renderer 回帰で、`self` の表示、操作名、Unknown / Unresolved、コピー対象 Mermaid text の一致を確認する。
 
+### Decision: 活性化命令は共通 Mermaid テキストの契約として扱う
+
+- **Context**: WebView が描画直前にのみ `activate` / `deactivate` を補完しており、画面上の活性化と Clipboard の Mermaid テキストが一致しない。
+- **Sources Consulted**: `src/renderer/mermaidRenderer.ts`、`src/integration/webviewMermaid.js`、`src/integration/visualizationView.ts`、`src/test/mermaidRenderer.test.ts`、`src/test/visualizationView.test.ts`。
+- **Findings**:
+  - `MermaidRenderer` の `RenderContext` は Mermaid の行、SourceMap、処理 Note の行番号を一元的に管理している。
+  - WebView の `buildMermaidRenderText()` は正規 Mermaid テキストを別の描画用文字列へ変換するため、Clipboard が保持する文字列と分岐する。
+  - Python の Flow Model は既存の共通 Renderer を入力として利用するため、Python 専用の活性化ロジックを追加しても言語横断の不一致を解消できない。
+- **Alternatives Considered**:
+  1. WebView の変換済み文字列を Clipboard へ返す。
+  2. Python Analyzer が活性化専用データを出力する。
+  3. 共通 Renderer が活性化命令を含む正規 Mermaid テキストを生成し、WebView と Clipboard がその文字列を共有する。
+- **Selected Approach**: 3 を採用する。共通仕様が `MermaidRenderer` 内で活性化命令を生成し、WebView は文字列を変更せずに描画する。Python 仕様は、その共通契約を Python Flow Model の回帰 fixture で検証する。
+- **Rationale**: Common Flow Model first、Renderer independence、Mermaid-first、および表示とコピーの完全一致を同時に保てる。
+- **Trade-offs**: 共通 Renderer の行生成時に活性化命令を扱うため、SourceMap と process note の Mermaid 行番号を正規テキスト基準で回帰検証する必要がある。
+- **Follow-up**: 共通 `function-flow-visualization` 仕様で Renderer / WebView の改修を設計・実装した後、Python の Call / Await / Return / Throw fixture で完全一致を確認する。
+
 ## References
 
 - [Lezer Python](https://github.com/lezer-parser/python) — Python 構文解析の既存基盤

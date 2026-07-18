@@ -395,9 +395,9 @@ interface CommandController {
 - 条件ラベルの配置は描画後の表示用 `transform` で上方へ調整し、対応する枠の上部に近づける。フラグメント種別ラベルの位置は変更しない。Mermaid text、制御ブロックの範囲、メッセージ間隔、SVGのレイアウト属性は変更しない。
 - Control Block の枠線・ラベル色は Mermaid 既定の `.loopLine` 等との競合を避けるため、nonce付きWebviewスタイルシートで `#diagram svg` を起点とする高詳細度セレクタと `!important` を用いて、描画後に付与した対象 SVG shape と label text のクラスを装飾する。これにより、SVG内のMermaid規則より優先して評価され、Webview CSP によりブロックされる動的な `style.setProperty` へ依存しない。枠線は `stroke-dasharray: none`、`stroke-width: 1.8px` とし、`loop` `#9fd0ff`、`alt` `#8ff2ff`、`opt` `#fde68a`、`critical` `#ddd6fe`、`option` `#fbcfe8` を使用する。制御ラベル枠の横幅やfont-sizeを追加調整する専用定義値は設けず、Mermaid の自然な幅計算を維持する。
 - ライフラインと participant 境界線は Webview CSS で背景へ埋もれない明るいグレー系へ調整し、root function の participant は他 participant より少し強い枠線と背景で強調する。
-- 実行中の区間は Webview が描画用 Mermaid text に `activate` / `deactivate` を補助的に加えて Mermaid の activation 表示を利用する。この補助は Webview 内の描画入力だけに限定し、コピー対象の Mermaid text、Common Flow Model、Renderer contract は変更しない。
+- 実行中の区間は Renderer が正規 Mermaid text に `activate` / `deactivate` を出力して Mermaid の activation 表示を利用する。Webview は正規 Mermaid text を変更せずに描画し、コピー対象の Mermaid text と同一に保つ。Common Flow Model は活性化専用の表示データを持たない。
 - `await` 呼び出しと `return` は Webview が描画済み SVG を装飾し、await は通常 call と区別できるアクセントカラー、return は控えめな色で call と区別する。
-- Renderer は引き続き Mermaid text の生成のみを担当し、ライフライン、activation、await / return、root participant の配色やテーマ適用は Visualization / Webview 層の責務とする。
+- Renderer は Mermaid text の構造としてライフライン、activation、await / return、root participant を出力し、Visualization / Webview 層は配色・テーマ・描画後 SVG 装飾だけを担当する。
 - root participant は対象関数の開始から終了まで常時 activation 表示し、解析対象と処理全体の起点を明示する。他 participant は Call / Await の実行期間だけ activation 表示する。
 - ライフラインはダークテーマ上で埋もれない白系にし、activation、文字、矢印より目立ちすぎない太さと opacity に調整する。
 - Control Block は `loop` Blue、`alt` Cyan、`opt` Yellow、`critical` Purple、`option` Magenta のアクセントを枠線、ラベル、タブへ適用し、淡いグレー基調へ寄せない。
@@ -1225,3 +1225,90 @@ interface FlowCallNode extends BaseFlowNode {
 - VisualizationView / ClipboardAdapter の回帰で、表示中とコピーされた Mermaid text が一致し、SourceMap、処理順、既存の await / return / diagnostic 表示が変わらないことを検証する。
 - Renderer test で、edge を持たない先頭 Call が `self` root から一度だけ描画され、nodeId と sourceLocation を持つ SourceMap を返し、架空の edgeId や warning を生成しないことを検証する。
 - VS Code integration test で、cursor 実行、CodeLens 実行、Copy Mermaid の各経路が、関数先頭の Call を含む Mermaid text を返すことを検証する。
+
+## Mermaid 活性化の正規出力設計
+
+### Boundary Commitments Amendment
+
+**This Spec Owns**
+
+- Common Flow Model の Call / Await / Return / Throw と FlowEdge の実行順から、活性化命令を含む正規 Mermaid テキストを生成する契約。
+- WebView の描画入力、詳細表示の Mermaid テキスト、Clipboard のコピー内容が byte-for-byte で同一となる契約。
+- 正規 Mermaid の行追加後も SourceMap、process note decoration、unknown / unresolved、partial result、fallback を維持する回帰検証。
+
+**Out of Boundary**
+
+- 実行時トレース、対象コード実行、動的 receiver の完全解決、または実行時の活性化状態の推測。
+- Language Analyzer ごとの活性化構文・WebView・Clipboard 分岐。
+- Mermaid 以外の図表形式、外部レンダリングサービス、新規依存の導入。
+
+**Allowed Dependencies**
+
+- Common Flow Model、既存 `MermaidRenderer`、`MessageLabelFormatter`、`VisualizationView`、Clipboard、SourceMap、process note decoration。
+- Mermaid sequence diagram の標準 `activate` / `deactivate` 構文。新規ライブラリは使用しない。
+
+**Revalidation Triggers**
+
+- Call / Await / Return / Throw の FlowNode または FlowEdge の意味、Renderer の行出力順、SourceMap / process note の行番号契約を変更する場合。
+- WebView の Mermaid 描画入力、fallback、Clipboard payload、または SVG 装飾が Mermaid テキストを変更する場合。
+- Python を含む新しい Language Analyzer が共通 Call / terminal の順序を満たせない場合。
+
+### Architecture Decision
+
+`MermaidRenderer` は Mermaid 構文の唯一の生成元とする。`RenderContext` は participant 宣言の直後に root の活性化を出力し、Call message、Return message、Throw を含む terminal 処理を出力する同じ行生成経路で、呼び出し先 participant の活性化開始・終了を出力する。活性化の開始・終了は既存の静的 Flow Model の Call と terminal edge の順序だけから導出し、動的な実行状態を補完しない。
+
+呼び出し先 participant は Call の直後に活性化する。対応する Return が静的に描画される場合は Return message の直後に停止する。対応する terminal を静的に結べない場合は、既存の表現可能な逐次範囲で停止し、未解決・部分解析・不確実性の既存通知契約を変更しない。root は participant 宣言後から図の終端まで活性化し、終端で停止する。
+
+活性化命令も `RenderContext.addLine()` で出力する。これにより SourceMap、`ProcessNoteDecoration.mermaidLine`、diagnostic の行番号は、活性化を含む正規 Mermaid テキストの行番号を参照する。Application、`VisualizationView`、Clipboard は既存の `RenderResult.mermaidText` をそのまま伝播するため、公開型は変更しない。
+
+`webviewMermaid.js` は `GLITCHLENS_VIEW_MODEL.mermaidText` をそのまま `mermaid.render()` へ渡す。活性化命令を補完・削除・並べ替える処理は持たない。描画後の SVG テーマ、participant、await、return、control、process note の装飾は Mermaid 構造を変更しないため、そのまま維持する。
+
+```mermaid
+sequenceDiagram
+    participant Analyzer
+    participant FlowModel
+    participant MermaidRenderer
+    participant WebView
+    participant Clipboard
+    Analyzer->>FlowModel: Call / Await / Return / Throw
+    FlowModel->>MermaidRenderer: 静的な node と edge の順序
+    MermaidRenderer->>MermaidRenderer: 活性化を含む mermaidText を生成
+    MermaidRenderer->>WebView: mermaidText
+    WebView->>WebView: 同じ mermaidText を描画
+    WebView->>Clipboard: 同じ mermaidText をコピー
+```
+
+### Component and File Structure Impact
+
+| Component | Domain / Layer | Intent | Requirements | Dependencies |
+|---|---|---|---|---|
+| MermaidRenderer / RenderContext | Renderer | 活性化を含む正規 Mermaid、SourceMap、process note 行番号を生成する | 4.1, 4.2, 4.3, 5.2, 9.11, 9.18 | FlowModel P0, MessageLabelFormatter P0 |
+| WebView Mermaid renderer | Integration | 正規 Mermaid テキストを変更せず描画し、SVG 装飾だけを適用する | 4.2, 4.4, 9.18, 9.19 | VisualizationViewModel P0, Mermaid P0 |
+| VisualizationView / ClipboardAdapter | Integration | 同じ `mermaidText` を詳細表示・Clipboard へ提供する | 5.1, 5.2, 5.3, 9.11 | RenderResult P0 |
+
+- `src/renderer/mermaidRenderer.ts` — `RenderContext` の正規行出力へ root / participant の `activate` / `deactivate` を統合し、SourceMap と process note の行番号を同じ出力順で維持する。
+- `src/integration/webviewMermaid.js` — `buildMermaidRenderText()` と、その Mermaid 構造を変更する補助関数を除去し、正規 `mermaidText` を直接描画する。
+- `src/integration/visualizationView.ts` — コピー対象が正規 `mermaidText` である既存契約を維持する。必要な変更は行わないが、WebView payload と Clipboard の同一性を回帰検証する。
+- `src/test/mermaidRenderer.test.ts` — root、Call、Await、Return、Throw、入れ子 Call、partial result の活性化命令、SourceMap、process note 行番号を検証する。
+- `src/test/visualizationView.test.ts` — WebView の描画入力・詳細表示・Clipboard が活性化命令を含む同一文字列であり、WebView に構造変換が残らないことを検証する。
+- `src/test/pythonFunctionFlow.test.ts` — Python Flow Model も同じ正規 Mermaid と活性化契約を利用し、Python 専用分岐を持たないことを回帰検証する。
+
+### Requirements Traceability Amendment
+
+| Requirement | Design response |
+|---|---|
+| 4.1 | `MermaidRenderer` が活性化を含む正規 Mermaid テキストを生成する。 |
+| 4.2 | WebView は Renderer の正規 Mermaid テキストを変更せずに表示する。 |
+| 4.3 | Call / Await / Return / Throw の静的順序と活性化期間を同じ Mermaid で確認可能にする。 |
+| 4.5 | partial result でも静的に表現可能な Call / terminal の活性化と既存通知を維持する。 |
+| 5.1–5.3 | Clipboard は活性化を含む表示入力と同じ Mermaid を保存し、コピー不可時の既存通知を維持する。 |
+| 9.11 | ズーム、Fit、パン、スクロールは正規 Mermaid、Clipboard、SourceMap、SVG 装飾を変更しない。 |
+| 9.18–9.19 | activation を含む余白を Renderer の Mermaid で描画し、失敗時は同じ正規 Mermaid を fallback として表示する。 |
+
+### Testing Strategy Amendment
+
+- `mermaidRenderer.test.ts` で `participant root as self`、`activate root`、Call の直後の participant 活性化、対応する Return / Throw による停止、最終 root 停止を正規 Mermaid テキストとして検証する。
+- Call、Await、Return、Throw、入れ子 Call、unknown / unresolved、partial result、loop / branch / try-catch を含む fixture で、活性化が処理順・participant・メッセージ・warning を変更しないことを検証する。
+- SourceMap と `ProcessNoteDecoration.mermaidLine` が、活性化命令を含む最終 Mermaid テキストの行番号を参照することを検証する。
+- `visualizationView.test.ts` で WebView の `mermaid.render()` が正規 `mermaidText` を直接使用し、Clipboard、詳細表示、fallback の Mermaid テキストと byte-for-byte で一致することを検証する。
+- Python fixture を Renderer / VisualizationView に渡し、TypeScript / JavaScript と同じ活性化・コピー契約を満たし、Python 専用の Renderer / WebView 分岐が存在しないことを検証する。

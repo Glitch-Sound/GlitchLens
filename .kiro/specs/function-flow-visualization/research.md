@@ -420,3 +420,51 @@
 - loop の出口を誤って loop 内へ接続するリスク — `break-exit` の target が loop body 内でないことを Analyzer と Renderer の fixture で検証する。
 - continue を通常の逐次処理として描画するリスク — `continue-loop` は次反復の制御 edge とし、Renderer は循環メッセージを追加しない。
 - 不確実性の表示経路が混在するリスク — FlowDiagnostic と RendererWarning を Application の別変換で検証する。
+
+---
+
+## Mermaid 活性化とコピー一致の設計調査
+
+### Summary
+
+- WebView は `buildMermaidRenderText()` で `activate` / `deactivate` を描画時だけに補完しているため、Clipboard の `mermaidText` と図の構造が分岐している。
+- `MermaidRenderer` は正規 Mermaid の行、SourceMap、process note の行番号を管理する唯一の境界であり、活性化命令の生成責務を置ける。
+- 新規ライブラリ、Flow Model の活性化専用フィールド、Analyzer の言語別活性化ロジックは不要である。
+
+### Research Log
+
+#### Renderer と WebView の文字列経路
+
+- **Sources Consulted**: `src/renderer/mermaidRenderer.ts`、`src/application/visualizeFunctionFlow.ts`、`src/integration/visualizationView.ts`、`src/integration/webviewMermaid.js`、`src/test/mermaidRenderer.test.ts`、`src/test/visualizationView.test.ts`。
+- **Findings**:
+  - `MermaidRenderer` の `RenderContext` は Mermaid の行、SourceMap、処理 Note の行番号を一元的に管理している。
+  - `VisualizationView` は Renderer から受けた `mermaidText` を保持して Clipboard へ渡すが、WebView はその文字列を `buildMermaidRenderText()` で別の描画入力へ変換する。
+  - WebView の変換は root と呼び出し先 participant の活性化を補完するが、その変換後の文字列は表示・コピーの公開契約に存在しない。
+- **Implications**:
+  - Renderer が活性化命令を含む正規 Mermaid を出力し、行番号を正規出力に対して確定する。
+  - WebView は正規 Mermaid を変更せずに描画し、SVG 装飾だけを担当する。
+
+### Design Decisions
+
+#### Decision: Renderer を活性化命令の唯一の生成元にする
+
+- **Alternatives Considered**:
+  1. WebView の変換済み文字列を Clipboard に返す。
+  2. 各 Language Analyzer が活性化専用の Flow Model データを追加する。
+  3. `MermaidRenderer` が既存の Call / Await / Return / Throw と FlowEdge の順序から活性化命令を正規 Mermaid テキストへ出力する。
+- **Selected Approach**: 3 を採用する。
+- **Rationale**: Renderer が Mermaid 構文の唯一の責務を持つ既存境界、Common Flow Model first、Mermaid-first、および表示とコピーの完全一致を維持できる。
+- **Trade-offs**: 活性化命令の追加により Mermaid 行番号が増えるため、SourceMap と process note の行番号を Renderer 出力基準で検証する必要がある。
+- **Follow-up**: Call、Await、Return、Throw、入れ子 Call、partial result を含む Renderer / WebView fixture を追加し、活性化命令を含む文字列の完全一致を確認する。
+
+#### Design Synthesis
+
+- **Generalization**: 表示専用の文字列変換ではなく、再利用可能な Mermaid 構造を Renderer の正規出力へ集約する。
+- **Build vs. Adopt**: Mermaid の sequence diagram 標準 `activate` / `deactivate` 構文と既存 Renderer を使用し、新規依存や独自の図表形式は追加しない。
+- **Simplification**: Flow Model、Analyzer、Application、Clipboard API の型を変更せず、Renderer 内部の活性化出力状態と WebView の不要な構造変換だけを変更する。
+
+### Risks & Mitigations
+
+- 活性化命令の行追加で SourceMap または process note 行番号がずれるリスク — Renderer の `addLine()` 経路で命令を出力し、行番号の回帰テストを追加する。
+- Call の後に対応する終端がない場合に活性化が閉じないリスク — 既存の静的 FlowEdge と terminal node から閉じる規則を定義し、表現不能な状態を実行時情報で補完しない。
+- WebView の旧後処理が残り二重活性化するリスク — Mermaid 構造の書き換え関数を削除し、WebView が受け取った文字列を直接描画することをテストする。
